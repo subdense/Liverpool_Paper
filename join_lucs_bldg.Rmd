@@ -1,0 +1,143 @@
+
+---
+title: "Join LUCS"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = "C:/Users/Vera/Documents/SUBDENSE/Data")
+```
+
+## Load libraries
+```{r}
+library(tidyverse)
+library(vroom)
+library(sf)
+```
+
+
+## Load data
+```{r}
+## data 2013-2017 identical
+dat_13 <- read.csv("England/LUCS/LUCS_2013-14_addresses.csv")
+dat_14 <- read.csv("England/LUCS/LUCS_2014-15_addresses.csv")
+dat_15 <- read.csv("England/LUCS/LUCS_2015-16_addresses.csv")
+dat_16 <- read.csv("England/LUCS/LUCS_2016-17_addresses.csv")
+dat_17 <- read.csv("England/LUCS/LUCS_2017-18_addresses.csv")
+
+## data 2018-2021 different structure
+dat_18 <- read.csv("England/LUCS/LUCS_2018-19_addresses.csv")
+dat_19 <- read.csv("England/LUCS/LUCS_2019-20_addresses.csv")
+dat_20 <- read.csv("England/LUCS/LUCS_2020-21_addresses.csv")
+dat_21 <- read.csv("England/LUCS/LUCS_2021-22_addresses.csv")
+
+## Boundary Liverpool
+liv <- st_read("boundaries/liverpool_metropolitan_dissolved.gpkg")
+
+## Boundary Bristol
+bri <- st_read("boundaries/bcr-lad-avon.gpkg")
+
+## Building footprints t1
+bldg_23 <- st_read("England/OS MasterMap/Liverpool 2023/footprints_2023.gpkg")
+bldg_23_bri <- st_read("England/OS MasterMap/Bristol 2023/footprints_2023.gpkg")
+```
+
+## Clean and combine data
+```{r}
+dat_18_21 <- dat_18 %>% mutate(Year = "2018-19") %>% 
+  bind_rows(dat_19 %>% mutate(Year = "2019-20")) %>% 
+  bind_rows(dat_20 %>% mutate(Year = "2020-21")) %>% 
+  bind_rows(dat_21 %>% mutate(Year = "2021-22")) 
+
+dat_13_17 <- dat_13 %>% 
+  bind_rows(dat_14) %>% 
+  bind_rows(dat_15) %>% 
+  bind_rows(dat_16) %>% 
+  bind_rows(dat_17) 
+
+dat_13_17_clean <- dat_13_17 %>% 
+  transmute(EASTING, NORTHING, Year,
+            COMPLETIONS = CREATIONS,
+            DEMOLITIONS = DELETIONS,
+            CONVERSIONS_TORESIDENTIAL = CONVERSION,
+            CONVERSIONS_FROMRESIDENTIAL = CONVERSI_1,
+            TO_DENSITY, LA_CODE, LA_NAME,
+            COUNTRY = "ENGLAND",
+            LUCS_FROM_CODE = LUCS_FROM_,
+            V_FROM_CODE = V_FROM_COD,
+            V_LANDTYPE,
+            V_FROM_CODE_OLDSTYLE = "?",
+            FROM_GROUP, From)
+
+dat <- dat_13_17_clean %>% 
+  bind_rows(dat_18_21)
+
+summary(dat)
+```
+
+
+## Create pointlayer
+```{r}
+dat_point <- st_as_sf(dat, coords = c("EASTING", "NORTHING"), crs = 27700)
+```
+
+## Reduce to Liverpool
+```{r}
+reference_crs <- st_crs(dat_point)
+
+# CRS transformieren
+liv <- st_transform(liv, reference_crs)
+bldg_23 <- st_transform(bldg_23, reference_crs)
+
+bri <- st_transform(bri, reference_crs)
+bldg_23_bri <- st_transform(bldg_23_bri, reference_crs)
+
+# Reduce data to Liverpool
+dat_liv <- st_filter(dat_point, liv, .predicate = st_within)
+bldg_23_liv <- st_filter(bldg_23, liv, .predicate = st_within)
+
+# Reduce data to Bristol
+dat_bri <- st_filter(dat_point, bri, .predicate = st_within)
+bldg_23_bri <- st_filter(bldg_23_bri, bri, .predicate = st_within)
+```
+
+## Join fid_os to LUCs
+```{r}
+# Find nearest features
+nearest_index <- st_nearest_feature(dat_liv, bldg_23_liv)
+nearest_index_bri <- st_nearest_feature(dat_bri, bldg_23_bri)
+
+# Add attributes of nearest polygon to each point
+joined <- cbind(dat_liv, bldg_23_liv[nearest_index, ])
+joined_bri <- cbind(dat_bri, bldg_23_bri[nearest_index_bri, ])
+
+```
+
+## Final datasets
+```{r}
+gardens <- joined %>% 
+  select(Year, LUCS_FROM_CODE, fid_os) %>% 
+  filter(LUCS_FROM_CODE == "RG")
+
+gardens_bri <- joined_bri %>% 
+  select(Year, LUCS_FROM_CODE, fid_os) %>% 
+  filter(LUCS_FROM_CODE == "RG")
+```
+
+## write data
+```{r}
+st_write(joined, "lucs_liv.gpkg", delete_layer = TRUE)
+st_write(joined_bri, "lucs_bri.gpkg", delete_layer = TRUE)
+```
+
+
+
+
+
+
+
+
+
+
+
