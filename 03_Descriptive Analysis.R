@@ -3,30 +3,39 @@ library(sf)
 library(ggplot2)
 library(dplyr)
 library(PerformanceAnalytics)
+library(tidyr)
+library(forcats)
+library(corrplot)
 
-dens_grid <- st_read("C:/Users/Vera/Documents/SUBDENSE/Projects/Liverpool_Dembski/R/R Outputs/grid_full.gpkg") %>% st_drop_geometry()
+#dens_grid <- st_read("C:/Users/Vera/Documents/SUBDENSE/Projects/Liverpool_Dembski/R/R Outputs/grid_full.gpkg") %>% st_drop_geometry() #Pfad Vera
+dens_grid <- st_read("G:/ai_daten/P1047_SUBDENSE/liverpool_paper/Projects/Liverpool_Dembski/R Outputs/grid_full.gpkg") %>% st_drop_geometry() #Pfad Denise
+
 #reduce to grid cells in built-up area 2011
 dens_grid <- dens_grid %>% filter(builtup2011 == 1)
 
 
 #Prevalence (still using the old types)----
   color_mapping <- c(
-    "Total Densification" = "#156082",
-    "Single-family" = "#00b0f0",
-    "Apartments" = "#ff0000",
-    "Multi-in-single" = "#c00000",
-    "Demolish-rebuild" = "#ffc000",
-    "HMO" = "#92d050"
+    "Total Densification" = "#636363",
+    "large_sfh" = "#156082",
+    "small_sfh" = "#00b0f0",
+    "small_mfh" = "#ff0000",
+    "large_mfh" = "#c00000",
+    "office_rental" = "#ffc000",
+    "hmo" = "#92d050", 
+    "subdivision" = "#c51b8a"
   )
 
   totals <- dens_grid %>%
     summarise(
-      'Total Densification' = sum(hunits_dens, na.rm = TRUE),
-      'Single-family'= sum(sfh_dens, na.rm = TRUE),
-      'Apartments'= sum(flat_dens, na.rm = TRUE),
-      'Multi-in-single'= sum(mfh_in_sfh, na.rm = TRUE),
-      'HMO'= sum(hmo_dens, na.rm = TRUE),
-      'Demolish-rebuild' = sum(hunits_dens_afterdemo, na.rm = TRUE)
+      # 'Total Densification' = sum(hunits_dens, na.rm = TRUE),
+      'large_sfh'= sum(large_sfh, na.rm = TRUE),
+      'small_sfh'= sum(small_sfh, na.rm = TRUE),
+      'small_mfh'= sum(small_mfh, na.rm = TRUE),
+      'large_mfh'= sum(large_mfh, na.rm = TRUE),
+      'office_rental' = sum(office_rental, na.rm = TRUE),
+      'hmo' = sum(hmo, na.rm = TRUE),
+      'subdivision' = sum(subdivision, na.rm = TRUE)
     ) %>%
     pivot_longer(
       cols = everything(),
@@ -34,10 +43,17 @@ dens_grid <- dens_grid %>% filter(builtup2011 == 1)
       values_to = "count"
     )
   
-  totals$Type <- fct_relevel(totals$Type, 
-                             "Total Densification", "Single-family", "Apartments", 
-                             "Multi-in-single", "HMO", "Demolish-rebuild")
+  totals_all <- totals %>% 
+    summarise(count = sum(count)) %>% 
+    transmute(Type = "Total Densification", count)
   
+  totals <- totals %>% 
+    bind_rows(totals_all)
+  
+  totals$Type <- fct_relevel(totals$Type, 
+                             "Total Densification", "large_sfh", "small_sfh", "small_mfh", "large_mfh", "office_rental", "hmo", "subdivision")
+  
+
   
   
   ggplot(totals, aes(x = count, y = Type, fill = Type)) +
@@ -72,7 +88,10 @@ dens_grid <- dens_grid %>% filter(builtup2011 == 1)
   
 
 #Correlation----
-  dens_corr <- dens_grid %>% select(c(amenity_count, m_to_park, m_to_train, min_to_livmain, share_transport, share_water, share_parks, share_sports, share_industry, share_port, sfh_share, nb11_LDcount, nb11_MDcount, nb11_HDcount, nb11_NBcount, deprivation)) %>% st_drop_geometry()
+  dens_corr <- dens_grid %>% select(c(amenity_count, m_to_park, m_to_train, min_to_livmain, 
+                                      #share_transport, 
+                                      water, parks, sports, industry, port, 
+                                      sfh_share, nb11_LDcount, nb11_MDcount, nb11_HDcount, nb11_NBcount, deprivation)) %>% st_drop_geometry()
   dens_corr <- na.omit(dens_corr)
   dens_corr <- cor(dens_corr)
   corrplot(dens_corr, type = "upper",  tl.col = "black", tl.srt = 45)
