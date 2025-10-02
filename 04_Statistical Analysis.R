@@ -18,8 +18,10 @@ library(pROC)
 options(scipen = 999)
 
 #READ DATA----
-setwd("C:/Users/Vera/Documents/SUBDENSE")
-dens_grid <- st_read("Projects/Liverpool_Dembski/R Output/grid_full.gpkg") %>% 
+#setwd("C:/Users/Vera/Documents/SUBDENSE")
+setwd("G:/ai_daten/P1047_SUBDENSE/liverpool_paper")
+dens_grid <- st_read("G:/ai_daten/P1047_SUBDENSE/liverpool_paper/Projects/Liverpool_Dembski/R Outputs/grid_full.gpkg") %>% #Pfad Denise
+# dens_grid <- st_read("Projects/Liverpool_Dembski/R Output/grid_full.gpkg") %>% 
   filter(builtup2011 == 1) %>% #from now on only interested in cells in builtup area
   st_drop_geometry() #%>% 
   #mutate(dominant_year = factor(dominant_year, levels = c("pre1900", "1900_1918", "1919_1939", "1945_1999", "post2000"), ordered = TRUE))
