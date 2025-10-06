@@ -7,14 +7,13 @@ library(tidyr)
 library(forcats)
 library(corrplot)
 
-#dens_grid <- st_read("C:/Users/Vera/Documents/SUBDENSE/Projects/Liverpool_Dembski/R/R Outputs/grid_full.gpkg") %>% st_drop_geometry() #Pfad Vera
-dens_grid <- st_read("G:/ai_daten/P1047_SUBDENSE/liverpool_paper/Projects/Liverpool_Dembski/R Outputs/grid_full.gpkg") %>% st_drop_geometry() #Pfad Denise
+dens_grid <- st_read("C:/Users/Vera/Documents/SUBDENSE/Projects/Liverpool_Dembski/R Output/grid_full.gpkg") %>% st_drop_geometry() #Pfad Vera
+#dens_grid <- st_read("G:/ai_daten/P1047_SUBDENSE/liverpool_paper/Projects/Liverpool_Dembski/R Outputs/grid_full.gpkg") %>% st_drop_geometry() #Pfad Denise
 
 #reduce to grid cells in built-up area 2011
 dens_grid <- dens_grid %>% filter(builtup2011 == 1)
 
-
-#Prevalence (still using the old types)----
+#Prevalence----
   color_mapping <- c(
     "Total Densification" = "#636363",
     "large_sfh" = "#156082",

@@ -206,6 +206,7 @@ library(dbscan)
   intersections <- st_join(grid, addresses) %>% st_drop_geometry()
   count <- intersections %>% group_by(grid_id) %>%
     summarize(
+      #dichotomous variables
       hmo = as.integer(any(hmo_dens == 1)), #returns 1 if there are any hmo_dens observations in the grid cell
       office_rental = as.integer(any(office_retail == 1)), #same for office/retail to rental conversions
       large_mfh = as.integer(any(hmo_dens != 1 & office_retail != 1 & flat_dominant == 1 & large_project == 1)), 
@@ -213,6 +214,16 @@ library(dbscan)
       large_sfh = as.integer(any(hmo_dens != 1 & office_retail != 1 & sfh_dominant == 1 & large_project == 1)), 
       small_sfh = as.integer(any(hmo_dens != 1 & office_retail != 1 & sfh_dominant == 1 & large_project == 0)), 
       subdivision = as.integer(any(subdivision == 1)),
+      
+      #unit counts
+      hmo_ct = sum(hmo_dens == 1, na.rm = TRUE), 
+      office_rental_ct = sum(office_retail == 1, na.rm = TRUE), #same for office/retail to rental conversions
+      large_mfh_ct = sum(hmo_dens != 1 & office_retail != 1 & flat_dominant == 1 & large_project == 1, na.rm = TRUE), 
+      small_mfh_ct = sum(hmo_dens != 1 & office_retail != 1 & flat_dominant == 1 & large_project == 0, na.rm = TRUE), 
+      large_sfh_ct = sum(hmo_dens != 1 & office_retail != 1 & sfh_dominant == 1 & large_project == 1, na.rm = TRUE), 
+      small_sfh_ct = sum(hmo_dens != 1 & office_retail != 1 & sfh_dominant == 1 & large_project == 0, na.rm = TRUE), 
+      subdivision_ct = sum(subdivision == 1, na.rm = TRUE),
+      
       addresses_2013 = sum(all_2013)
     )
   
