@@ -5,17 +5,52 @@ library(dplyr)
 library(dbscan)
 
 
-#00 Read Data----
+#00 Read Data Vera----
   
-  setwd("C:/Users/Vera/Documents/SUBDENSE/Data")  
+  # setwd("C:/Users/Vera/Documents/SUBDENSE/Data")  
+  # 
+  # #boundaries: built-up area 2011 and liverpool case boundary
+  # builtup <- read_sf("England/Boundaries/Built_up_Areas_Dec_2011_Boundaries_V2_2022_6094869787211526009.gpkg") %>% select(BUA11CD) #built-up area 2011
+  # metro <- read_sf("boundaries/liverpool_metropolitan_dissolved.gpkg")
+  # 
+  # #addresses: joining addresses with classification file
+  # addb_blpu <- st_read("England/AddressBase/0040176195-6425786-1/6425786.gpkg/6425786.gpkg", layer = "blpu")
+  # addb_clas <- st_read("England/AddressBase/0040176195-6425786-1/6425786.gpkg/6425786.gpkg", layer = "classification")
+  # addresses <- addb_blpu %>% 
+  #   select(uprn, start_date, end_date) %>% 
+  #   left_join(addb_clas %>% 
+  #               transmute(uprn, class_key, classification_code, 
+  #                         start_date, 
+  #                         end_date))
+  # rm(addb_blpu, addb_clas)
+  # 
+  # #building footprints from 2013 that exist in 2023 for subdivisions
+  # stable_bld <- st_read("C:/Users/Vera/Documents/SUBDENSE/Projects/Liverpool_Dembski/Input data for analysis/liv_bldg_densetype.gpkg") %>%
+  #   filter(denstype == 'stable')
+  # 
+  # #create or read building footprint polygons for 2023
+  # #library(tidyverse)
+  # #library(vroom)
+  # #footprints_2023 <-
+  # #  list.files("England/OS MasterMap/Liverpool 2023", full.names = TRUE, recursive = TRUE) %>% 
+  # #  str_subset("gpkg$") %>% # selects all strings ending with gpkg
+  # #  map_dfr(read_sf, layer = "Topographicarea") %>% 
+  # #  filter(theme == "Buildings") %>%
+  # #  mutate(fid_os = fid) %>% select(-fid) %>%
+  # #  st_as_sf() %>%
+  # #  distinct(fid_os, .keep_all = TRUE) #at the tile intersections, buildings are double
+  # footprints_2023 <- st_read("England/OS MasterMap/Liverpool 2023/footprints_2023.gpkg")
+  
+#00 Read Data Denise----
+  setwd("G:/ai_daten/P1047_SUBDENSE/liverpool_paper")
   
   #boundaries: built-up area 2011 and liverpool case boundary
-  builtup <- read_sf("England/Boundaries/Built_up_Areas_Dec_2011_Boundaries_V2_2022_6094869787211526009.gpkg") %>% select(BUA11CD) #built-up area 2011
-  metro <- read_sf("boundaries/liverpool_metropolitan_dissolved.gpkg")
+  builtup <- read_sf("01_data_input/Built_up_Areas_Dec_2011_Boundaries_V2_2022_6094869787211526009.gpkg") %>% select(BUA11CD) #built-up area 2011
+  metro <- read_sf("01_data_input/liverpool_metropolitan_dissolved.gpkg")
   
   #addresses: joining addresses with classification file
-  addb_blpu <- st_read("England/AddressBase/0040176195-6425786-1/6425786.gpkg/6425786.gpkg", layer = "blpu")
-  addb_clas <- st_read("England/AddressBase/0040176195-6425786-1/6425786.gpkg/6425786.gpkg", layer = "classification")
+  addb_blpu <- st_read("G:/ai_daten/P1047_SUBDENSE/01_raw_data/UK/OS/AddressBase/AddressBase/0040176195-6425786-1/6425786.gpkg/6425786.gpkg", layer = "blpu")
+  addb_clas <- st_read("G:/ai_daten/P1047_SUBDENSE/01_raw_data/UK/OS/AddressBase/AddressBase/0040176195-6425786-1/6425786.gpkg/6425786.gpkg", layer = "classification")
   addresses <- addb_blpu %>% 
     select(uprn, start_date, end_date) %>% 
     left_join(addb_clas %>% 
@@ -25,21 +60,13 @@ library(dbscan)
   rm(addb_blpu, addb_clas)
   
   #building footprints from 2013 that exist in 2023 for subdivisions
-  stable_bld <- st_read("C:/Users/Vera/Documents/SUBDENSE/Projects/Liverpool_Dembski/Input data for analysis/liv_bldg_densetype.gpkg") %>%
+  stable_bld <- st_read("G:/ai_daten/P1047_SUBDENSE/liverpool_paper/02_data_prep_output/liv_bldg_densetype.gpkg") %>%
     filter(denstype == 'stable')
   
-  #create or read building footprint polygons for 2023
-  #library(tidyverse)
-  #library(vroom)
-  #footprints_2023 <-
-  #  list.files("England/OS MasterMap/Liverpool 2023", full.names = TRUE, recursive = TRUE) %>% 
-  #  str_subset("gpkg$") %>% # selects all strings ending with gpkg
-  #  map_dfr(read_sf, layer = "Topographicarea") %>% 
-  #  filter(theme == "Buildings") %>%
-  #  mutate(fid_os = fid) %>% select(-fid) %>%
-  #  st_as_sf() %>%
-  #  distinct(fid_os, .keep_all = TRUE) #at the tile intersections, buildings are double
-  footprints_2023 <- st_read("England/OS MasterMap/Liverpool 2023/footprints_2023.gpkg")
+  footprints_2023 <- st_read("G:/ai_daten/P1047_SUBDENSE/liverpool_paper/Projects/Liverpool_Dembski/OneDrive_2025-10-02/Input data for analysis/OS MasterMap/Liverpool City Region/2023/footprints_2023.gpkg")
+  
+  footprints_2023v2 <- st_read("G:/ai_daten/P1047_SUBDENSE/liverpool_paper/02_data_prep_output/liv_bldg_2023.gpkg")
+  
   
 #01 Filter to addresses in case area ----
   

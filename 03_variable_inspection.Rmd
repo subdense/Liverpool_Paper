@@ -1,0 +1,322 @@
+---
+title: "Data exploration"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+  word_document: default
+  pdf_document:
+    toc: true
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r load packages, include=FALSE}
+library(tidyverse)
+library(sf)
+library(readr)
+library(knitr)
+library(pROC)
+library(gridExtra)
+library(scales)
+library(corrgram)
+library(corrplot)
+```
+
+```{r setup, include=FALSE}
+my_wd_all_dat <- "G:/ai_daten/P1070_USBW/MbE_MUC"
+
+knitr::opts_knit$set(root.dir = normalizePath(my_wd_all_dat))
+```
+
+```{r read data, include=FALSE}
+# dens_grid <- st_read("C:/Users/Vera/Documents/SUBDENSE/Projects/Liverpool_Dembski/R Output/grid_full.gpkg") %>% st_drop_geometry() #Pfad Vera
+data_raw <- st_read("G:/ai_daten/P1047_SUBDENSE/liverpool_paper/01_data_input/in_vera/grid_full.gpkg")  #Pfad Denise
+
+
+# par_with_dep_raw <- st_read("G:/ai_daten/P1070_USBW/MbE_MUC/workfiles_03_git/data_prep_output/parcels_10_final_data.gpkg") 
+# var_desc <- read.csv("./workfiles_03_git/data_models/240925_MbE_MUC_data - Erklärende Variablen.csv")
+```
+
+# Data preparation
+```{r}
+#reduce to grid cells in built-up area 2011
+data <- data_raw %>% filter(builtup2011 == 1) %>% 
+  mutate(oac_challenged = as.numeric(ifelse(GRP %in% c("7a", "7b", "7c", "7d", "8a", "8b", "8c", "8d"),1,0)),     
+         oac_students = as.numeric(ifelse(GRP %in% c("2a", "2b"),1,0)),     
+         oac_success = as.numeric(ifelse(GRP %in% c("2c", "2d", "3d", "5a"),1,0))) %>% 
+  st_drop_geometry()
+```
+
+
+# Explore explanatory variables
+
+```{r overview explanatory var, include=FALSE}
+# summary(data)
+sum(is.na(data))
+colSums(is.na(data))
+names(data)
+```
+
+```{r functions, include=FALSE}
+
+# functions numeric variables
+print_description_variables <- function(var_desc, name_of_variable) {
+
+kable(var_desc %>% 
+        select(-var_name_german, -input_data, -reporting_date, -literature) %>% 
+        filter(var_name == name_of_variable) %>% 
+        pivot_longer(cols = category:rationale, names_to = "name", values_to = "value"), 
+      col.names = c("", ""), 
+      caption = "Basic information",
+      format.args = list(decimal.mark = '.', big.mark = ","))
+  
+}
+
+print_plots_numeric_var <- function(var_dat, name_of_variable) {
+
+p1 <- var_dat %>%
+  ggplot(aes(x = .data[[name_of_variable]]))+
+  geom_histogram()+
+  theme_light()
+
+p2 <- var_dat %>%
+  ggplot(aes(x = .data[[name_of_variable]]))+
+  geom_boxplot()+
+  theme_light()
+
+grid.arrange(p1, p2, ncol = 2, heights = 1)
+
+}
+
+# functions categorical/logic variables
+print_table_number_cat <- function(var_dat, name_of_variable) {
+  
+kable(var_dat %>% 
+        group_by(.data[[name_of_variable]]) %>% 
+        summarise(n = n()) %>% 
+        arrange(desc(n)), 
+      format.args = list(decimal.mark = '.', big.mark = ",")
+      )
+}
+
+print_barplot_cat_logi <- function(var_dat, name_of_variable) {
+
+var_dat %>% 
+  ggplot(aes(y = .data[[name_of_variable]]))+
+  geom_bar()+
+    theme_light()
+}
+```
+
+## Numeric variables
+
+### amenity_count
+
+```{r amenity_count, echo=FALSE, warning=FALSE, message=FALSE, fig.width=6, fig.height=3}
+# print_description_variables(var_desc, "amenity_count")
+summary(data$amenity_count)
+print_plots_numeric_var(data, "amenity_count")
+```
+
+### m_to_park
+
+```{r m_to_park, echo=FALSE, warning=FALSE, message=FALSE, fig.width=6, fig.height=3}
+# print_description_variables(var_desc, "m_to_park")
+summary(data$m_to_park)
+print_plots_numeric_var(data, "m_to_park")
+```
+
+  
+### m_to_train
+
+```{r m_to_train, echo=FALSE, warning=FALSE, message=FALSE, fig.width=6, fig.height=3}
+# print_description_variables(var_desc, "m_to_train")
+summary(data$m_to_train)
+print_plots_numeric_var(data, "m_to_train")
+```
+
+### min_to_livmain
+
+```{r min_to_livmain, echo=FALSE, warning=FALSE, message=FALSE, fig.width=6, fig.height=3}
+#print_description_variables(var_desc, "min_to_livmain")
+summary(data$min_to_livmain)
+print_plots_numeric_var(data, "min_to_livmain")
+```
+
+
+### nb11_LDcount
+
+```{r nb11_LDcount, echo=FALSE, warning=FALSE, message=FALSE, fig.width=6, fig.height=3}
+#print_description_variables(var_desc, "nb11_LDcount")
+summary(data$nb11_LDcount)
+print_plots_numeric_var(data, "nb11_LDcount")
+```
+
+### nb11_MDcount
+
+```{r nb11_MDcount, echo=FALSE, warning=FALSE, message=FALSE, fig.width=6, fig.height=3}
+#print_description_variables(var_desc, "nb11_MDcount")
+summary(data$nb11_MDcount)
+print_plots_numeric_var(data, "nb11_MDcount")
+```
+
+
+### nb11_HDcount
+
+```{r nb11_HDcount, echo=FALSE, warning=FALSE, message=FALSE, fig.width=6, fig.height=3}
+#print_description_variables(var_desc, "nb11_HDcount")
+summary(data$nb11_HDcount)
+print_plots_numeric_var(data, "nb11_HDcount")
+```
+         
+
+### nb11_NBcount
+
+```{r nb11_NBcount, echo=FALSE, warning=FALSE, message=FALSE, fig.width=6, fig.height=3}
+#print_description_variables(var_desc, "nb11_NBcount")
+summary(data$nb11_NBcount)
+print_plots_numeric_var(data, "nb11_NBcount")
+```
+
+       
+### sfh_share
+
+```{r sfh_share, echo=FALSE, warning=FALSE, message=FALSE, fig.width=6, fig.height=3}
+#print_description_variables(var_desc, "sfh_share")
+summary(data$sfh_share)
+print_plots_numeric_var(data, "sfh_share")
+```
+
+### Rank
+
+```{r Rank, echo=FALSE, warning=FALSE, message=FALSE, fig.width=6, fig.height=3}
+#print_description_variables(var_desc, "Rank")
+summary(data$Rank)
+print_plots_numeric_var(data, "Rank")
+```
+                   
+### deprivation
+
+```{r deprivation, echo=FALSE, warning=FALSE, message=FALSE, fig.width=6, fig.height=3}
+#print_description_variables(var_desc, "deprivation")
+summary(data$deprivation)
+print_plots_numeric_var(data, "deprivation")
+```
+
+### income_rank
+
+```{r income_rank, echo=FALSE, warning=FALSE, message=FALSE, fig.width=6, fig.height=3}
+#print_description_variables(var_desc, "income_rank")
+summary(data$income_rank)
+print_plots_numeric_var(data, "income_rank")
+```
+
+
+### addresses_2013
+
+```{r addresses_2013, echo=FALSE, warning=FALSE, message=FALSE, fig.width=6, fig.height=3}
+#print_description_variables(var_desc, "addresses_2013")
+summary(data$addresses_2013)
+print_plots_numeric_var(data, "addresses_2013")
+```
+
+## Categorical variables
+
+### dens_group11 
+
+```{r dens_group11, echo=FALSE, warning=FALSE, message=FALSE, fig.width=6, fig.height=3}
+#print_description_variables(var_desc, "dens_group11")
+print_table_number_cat(data, "dens_group11")
+print_barplot_cat_logi(data, "dens_group11")
+```
+
+                    
+
+
+```{r LSOA11CD, echo=FALSE, warning=FALSE, message=FALSE, fig.width=6, fig.height=3}
+### LSOA11CD
+#print_description_variables(var_desc, "LSOA11CD")
+# print_table_number_cat(data, "LSOA11CD")
+# print_barplot_cat_logi(data, "LSOA11CD")
+```
+
+### dominant_year
+
+```{r dominant_year, echo=FALSE, warning=FALSE, message=FALSE, fig.width=6, fig.height=3}
+#print_description_variables(var_desc, "dominant_year")
+print_table_number_cat(data, "dominant_year")
+print_barplot_cat_logi(data, "dominant_year")
+```
+
+
+
+## Logical variables
+
+### agriculture
+
+nature           agriculture      industry         water            sports          
+parks            port             airport          dump             rail
+
+```{r agriculture, echo=FALSE, warning=FALSE, message=FALSE, fig.width=4, fig.height=3}
+#print_description_variables(var_desc, "agriculture")
+summary(data$agriculture)
+print_barplot_cat_logi(data, "agriculture")
+```
+
+### oac_challenged
+
+```{r oac_challenged, echo=FALSE, warning=FALSE, message=FALSE, fig.width=4, fig.height=3}
+#print_description_variables(var_desc, "oac_challenged")
+summary(data$oac_challenged)
+print_barplot_cat_logi(data, "oac_challenged")
+```
+
+### oac_students
+
+```{r oac_students, echo=FALSE, warning=FALSE, message=FALSE, fig.width=4, fig.height=3}
+#print_description_variables(var_desc, "oac_students")
+summary(data$oac_students)
+print_barplot_cat_logi(data, "oac_students")
+```
+
+### oac_success
+
+```{r oac_success, echo=FALSE, warning=FALSE, message=FALSE, fig.width=4, fig.height=3}
+#print_description_variables(var_desc, "oac_success")
+summary(data$oac_success)
+print_barplot_cat_logi(data, "oac_success")
+```
+
+
+## Correlations between explanatory variables
+
+```{r correlations all,  echo=FALSE, warning=FALSE, message=FALSE, fig.width=6, fig.height=6}
+cor_var <- data %>%
+  dplyr::select(amenity_count:oac_success) %>%
+  dplyr::select(-builtup2011) %>% 
+  dplyr::select(where(is.numeric)) %>%
+  cor(use = "pairwise.complete.obs", method = "spearman")
+
+corrplot(cor_var, type="lower",
+         tl.cex = 0.6, cl.cex = 0.6,
+         tl.col = "black")
+corrplot(cor_var,
+         type="lower",
+         method = "number",
+         tl.cex = 0.6, cl.cex = 0.6, number.cex = 0.5,
+         tl.col = "black")
+```
+
+Correlations > 80
+
+Correlations > 70
+
+
+## Write data
+
+```{r, include=FALSE}
+#st_write(dat_bu_ldh_fin, "./workfiles_03_git/data_models/dat_all_bu.gpkg", delete_layer = TRUE)
+```
+

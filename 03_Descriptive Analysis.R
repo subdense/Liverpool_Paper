@@ -6,12 +6,16 @@ library(PerformanceAnalytics)
 library(tidyr)
 library(forcats)
 library(corrplot)
+library(svglite)
 
-dens_grid <- st_read("C:/Users/Vera/Documents/SUBDENSE/Projects/Liverpool_Dembski/R Output/grid_full.gpkg") %>% st_drop_geometry() #Pfad Vera
-#dens_grid <- st_read("G:/ai_daten/P1047_SUBDENSE/liverpool_paper/Projects/Liverpool_Dembski/R Outputs/grid_full.gpkg") %>% st_drop_geometry() #Pfad Denise
+# dens_grid <- st_read("C:/Users/Vera/Documents/SUBDENSE/Projects/Liverpool_Dembski/R Output/grid_full.gpkg") %>% st_drop_geometry() #Pfad Vera
+dens_grid <- st_read("G:/ai_daten/P1047_SUBDENSE/liverpool_paper/01_data_input/in_vera/grid_full.gpkg") %>% st_drop_geometry() #Pfad Denise
 
 #reduce to grid cells in built-up area 2011
-dens_grid <- dens_grid %>% filter(builtup2011 == 1)
+dens_grid <- dens_grid %>% filter(builtup2011 == 1) %>% 
+  mutate(oac_challenged = as.numeric(ifelse(GRP %in% c("7a", "7b", "7c", "7d", "8a", "8b", "8c", "8d"),1,0)),     
+         oac_students = as.numeric(ifelse(GRP %in% c("2a", "2b"),1,0)),     
+         oac_success = as.numeric(ifelse(GRP %in% c("2c", "2d", "3d", "5a"),1,0)))
 
 #Prevalence----
   color_mapping <- c(
@@ -24,6 +28,143 @@ dens_grid <- dens_grid %>% filter(builtup2011 == 1)
     "hmo" = "#92d050", 
     "subdivision" = "#c51b8a"
   )
+
+#data_preparation----
+##identify number of cells per type
+cells <- dens_grid %>% 
+  select(hmo:subdivision) %>% 
+  summarise_all(sum, na.rm = TRUE) %>% 
+  pivot_longer(
+    cols = everything(),
+    names_to = "type",
+    values_to = "count_cells")
+  
+##identify number of housing units per type
+units <- dens_grid %>% 
+  select(hmo_ct:subdivision_ct) %>% 
+  summarise_all(sum, na.rm = TRUE) %>% 
+  pivot_longer(
+    cols = everything(),
+    names_to = "type",
+    values_to = "count_units")
+
+dat_plot <- cells %>% 
+  bind_cols(units %>% select(-type)) %>% 
+  mutate(count_all_cells = sum(count_cells),
+         share_cells = count_cells/count_all_cells,
+         count_all_units = sum(count_units),
+         share_units = count_units/count_all_units)
+  
+##table
+table <- dat_plot %>% 
+  select(type, count_cells, share_cells, count_units, share_units) %>% 
+  mutate(share_cells = round(share_cells*100, 1),
+         share_units = round(share_units*100, 1))
+
+#plot quantities per type-----
+dat_plot %>% 
+  ggplot(aes(y = type, x = count_cells))+
+  geom_col()+
+  theme_light()
+
+dat_plot %>% 
+  ggplot(aes(y = type, x = count_units))+
+  geom_col()+
+  theme_light()
+
+dat_plot %>% 
+  ggplot(aes(y = type, x = share_cells))+
+  geom_col()+
+  theme_light()
+
+dat_plot %>% 
+  ggplot(aes(y = type, x = share_units))+
+  geom_col()+
+  theme_light()
+
+#prepare data explanatory variables
+dat_explanatory <- dens_grid %>% 
+  pivot_longer(cols = hmo:subdivision, 
+               names_to = "type", 
+               values_to = "type_0_1") %>% 
+  filter(type_0_1 == 1) %>% 
+  select(addresses_2013:income_rank, oac_challenged:type_0_1)
+
+# plot for all numeric variables
+
+# where to save
+out_dir <- "G:/ai_daten/P1047_SUBDENSE/liverpool_paper/figures"
+dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
+
+# pick the numeric columns to plot on the x-axis
+num_vars <- dat_explanatory %>%
+  dplyr::select(where(is.numeric)) %>%
+  names()
+
+# helper to make the same plot for any numeric variable vs y = type
+make_box <- function(df, x_var, y_var = "type") {
+  ggplot(df, aes(x = .data[[x_var]], y = .data[[y_var]])) +
+    geom_boxplot() +
+    theme_light() +
+    xlab(x_var) +
+    ylab("")
+}
+
+# save a plot for each numeric variable
+purrr::walk(num_vars, function(v) {
+  p <- make_box(dat_explanatory, v)
+  
+  # optional: sanitize filename a bit
+  fname <- paste0(gsub("[^[:alnum:]_]+", "_", v), ".svg")
+  
+  ggsave(
+    filename = fname,
+    plot = p,
+    device = "svg",
+    path = out_dir,
+    width = 4,
+    height = 2,
+    dpi = 300,
+    bg = "transparent"
+  )
+})
+
+----------------
+
+dat_explanatory %>% 
+  ggplot(aes(x = m_to_train))+
+  # geom_density()+
+  geom_histogram()+
+  # geom_boxplot()+
+  facet_wrap(~type, ncol = 1, strip.position="left")+
+  theme_light()
+
+
+m_to_train <- 
+  dat_explanatory %>% 
+  ggplot(aes(x = m_to_train, y = type))+
+  geom_boxplot()+
+  theme_light()+
+  ylab("")
+
+income_rank <- 
+  dat_explanatory %>% 
+  ggplot(aes(x = income_rank, y = type))+
+  geom_boxplot()+
+  theme_light()+
+  ylab("")
+
+
+library(svglite)
+ggsave(file="m_to_train.svg", plot= m_to_train, 
+       device = "svg", path = "G:/ai_daten/P1047_SUBDENSE/liverpool_paper/figures", width=3.5, height=1.5)
+
+ggsave(file="income_rank.svg", plot= income_rank, 
+       device = "svg", path = "G:/ai_daten/P1047_SUBDENSE/liverpool_paper/figures", width=3.5, height=1.5)
+
+
+
+++++++++++++ old vera +++++++++++++++
 
   totals <- dens_grid %>%
     summarise(
