@@ -7,14 +7,16 @@ library(ggplot2)
 library(dplyr)
 library(tidyr) #for pivoting
 
+library(forcats) #factor relevel
 library(pscl) #for model evaluation mcfadden
-library(forcats)
-library(corrplot)
-library(gridExtra)
 library(marginaleffects)
 library(pROC)
 library(car) #for vif test
 
+library(broom)
+library(purrr)
+library(flextable)
+library(officer)
 
 options(scipen = 999)
 
@@ -24,8 +26,7 @@ setwd("C:/Users/Vera/Documents/SUBDENSE")
 #dens_grid <- st_read("G:/ai_daten/P1047_SUBDENSE/liverpool_paper/Projects/Liverpool_Dembski/R Outputs/grid_full.gpkg") %>% #Pfad Denise
 dens_grid <- st_read("Projects/Liverpool_Dembski/R Output/grid_full.gpkg") %>% 
   filter(builtup2011 == 1) %>% #from now on only interested in cells in builtup area
-  st_drop_geometry() #%>% 
-  #mutate(dominant_year = factor(dominant_year, levels = c("pre1900", "1900_1918", "1919_1939", "1945_1999", "post2000"), ordered = TRUE))
+  st_drop_geometry() 
 
 #Transform variables----
 trans_grid <- dens_grid %>% 
@@ -35,7 +36,7 @@ trans_grid <- dens_grid %>%
     densification = as.factor(densification),
     
     #dist to train, standardized with cutoff at 5 km
-    scaled_disttrain = as.numeric(scale(pmin(m_to_train, 5000))),
+    scaled_disttrain = as.numeric(scale(pmin(m_to_train, 800))),
 
     #dist to park 
     scaled_distpark = as.numeric(scale(pmin(m_to_park, 2000))),
@@ -47,7 +48,7 @@ trans_grid <- dens_grid %>%
     scaled_logamenities = as.numeric(scale(log(amenity_count + 1))),
     
     #density2013
-    scaled_density = as.numeric(scale(addresses_2013)),
+    scaled_logdensity = as.numeric(scale(log(addresses_2013 + 1))),
 
     #density nb
     scaled_hd_nb = as.numeric(scale(nb11_HDcount)),
@@ -62,13 +63,14 @@ trans_grid <- dens_grid %>%
     #deprivation = deprivation/max(deprivation),
 
     #output area classification
-    oac_challenged = as.numeric(ifelse(GRP %in% c("7a", "7b", "7c", "7d", "8a", "8b", "8c", "8d"),1,0)),
-    oac_students = as.numeric(ifelse(GRP %in% c("2a", "2b"),1,0)),
-    oac_success = as.numeric(ifelse(GRP %in% c("2c", "2d", "3d", "5a"),1,0)),
+    oac_constrained = as.numeric(ifelse(SPRGRP == "7",1,0)),
+    oac_cosmopolitan = as.numeric(ifelse(SPRGRP == "2",1,0)),
+    oac_ethnicentral = as.numeric(ifelse(SPRGRP == "3",1,0)),
+    oac_hardpressed = as.numeric(ifelse(SPRGRP == "8",1,0)),
+    oac_suburban = as.numeric(ifelse(SPRGRP == "6",1,0)),
     
     #building age
     dominant_year = fct_relevel(dominant_year, "1945_1999"), #back to unordered factor and set post war as reference 
-    #projects_reg$dominant_year <- factor(projects_reg$dominant_year, ordered = FALSE )
 
     #all land use variables turn into dichotomous. i do not scale binary variables
     dich_unlikely = as.numeric(ifelse(water > 0 |
@@ -86,11 +88,11 @@ trans_grid <- dens_grid %>%
   dplyr::select(grid_id, densification, 
          subdivision, hmo, office_rental, large_mfh, small_mfh, large_sfh, small_sfh,
          scaled_disttrain, scaled_distpark, scaled_distcenter,
-         scaled_density,
+         scaled_logdensity,
          scaled_logamenities, 
          scaled_hd_nb, scaled_ld_nb, scaled_ub_nb,
          dominant_year,
-         oac_challenged, oac_students, oac_success, 
+         oac_constrained, oac_cosmopolitan, oac_ethnicentral, oac_hardpressed, oac_suburban,
          scaled_incomerank,
          dich_sfh, 
          dich_unlikely, dich_park, dich_sports, dich_industry, dich_port, dich_nature, dich_agriculture
@@ -103,27 +105,14 @@ trans_grid <- dens_grid %>%
 sapply(trans_grid,function(x) sum(is.na(x)))
 trans_grid <- na.omit(trans_grid)
 
-#Plain regression----
-plain_grid <- trans_grid %>% dplyr::select(-c(subdivision, hmo, office_rental, large_mfh, small_mfh, large_sfh, small_sfh))
-model_plain <- glm(densification ~ .-grid_id, data = plain_grid, family = "binomial")
-summary(model_plain)
-vif(model_plain) 
 
-pR2(model_plain) #mcfadden
-
-avg_effects <- avg_slopes(model_plain)
-avg_effects
-
-#AUC and F1 of plain model
-pred <- predict(model_plain, type = "response")
-roc <- roc(plain_grid$densification, pred)
-auc(roc)
-
+#Helper function to calculate optimal f1----
 calculate_optimal_f1 <- function(pred_probs, actual_densification) {
   thresholds_seq <- seq(0, 1, by = 0.01)
   f1_scores <- sapply(thresholds_seq, function(cutoff) {
-    preds <- ifelse(pred > cutoff, 1, 0)
-    conf_mat <- table(factor(preds, levels = c(0, 1)), factor(actual_densification, levels = c(0, 1)))
+    preds <- ifelse(pred_probs > cutoff, 1, 0)
+    conf_mat <- table(factor(preds, levels = c(0, 1)), 
+                      factor(actual_densification, levels = c(0, 1)))
     
     TP <- conf_mat[2, 2]
     FP <- conf_mat[2, 1]
@@ -143,147 +132,88 @@ calculate_optimal_f1 <- function(pred_probs, actual_densification) {
   return(list(f1 = optimal_f1, optimal_cutoff = optimal_cutoff))
 }
 
-result <- calculate_optimal_f1(pred, plain_grid$densification)
-result$f1
-result$optimal_cutoff 
+#Run plain model----
+plain_grid <- trans_grid %>% dplyr::select(-c(subdivision, hmo, office_rental, large_mfh, small_mfh, large_sfh, small_sfh))
+model_plain <- glm(densification ~ .-grid_id, data = plain_grid, family = "binomial")
+summary(model_plain)
+vif(model_plain) 
 
-#Stepwise regression----
-library(MASS)
-step_model <- stepAIC(model_plain, direction = "both", trace = FALSE)
-summary(step_model)
-pred <- predict(step_model, type = "response")
-result <- calculate_optimal_f1(pred, plain_grid$densification)
-result$f1 #0.27 just like previous model
+pR2(model_plain) #mcfadden
 
-#Model without cells with incompatible land use (better but this also only leaves us with 26000 cells compared to 32500 above----
-plain_red_grid <- plain_grid %>% 
-  filter(dich_unlikely != 1 & dich_agriculture != 1 & dich_nature != 1 & dich_park != 1 & dich_sports != 1) %>% 
-  dplyr::select(-c(dich_unlikely, dich_agriculture, dich_nature, dich_park, dich_sports))
-model_red <- glm(densification ~ .-grid_id, data = plain_red_grid, family = "binomial")
-summary(model_red)
-vif(model_red) 
-pred <- predict(model_red, type = "response")
-result <- calculate_optimal_f1(pred, plain_red_grid$densification)
-result$f1 #0.34 = a bit better
-
-#What if we take out large projects and only predict all the other ones? ----
-small_grid <- trans_grid %>%
-  filter(large_mfh == 0 & large_sfh == 0) %>%
-  select(-c(subdivision, hmo, office_rental, large_mfh, small_mfh, large_sfh, small_sfh))
-
-model_small <- glm(densification ~ .-grid_id, data = small_grid, family = "binomial")
-summary(model_small)
-pR2(model_small) #mcfadden
-
-avg_effects <- avg_slopes(model_small)
+avg_effects <- avg_slopes(model_plain)
 avg_effects
+#Run models for densification types ----
+dependent_vars <- c("subdivision", "hmo", "office_rental", "large_mfh", "small_mfh", "large_sfh", "small_sfh")
 
-#AMONG DENSIFICATION PROJECTS - DID SUBDIVISIONS HAPPEN? ----
-subdi_grid <- trans_grid %>% 
-  filter(densification == 1) %>%
-  dplyr::select(-c(densification, hmo, office_rental, large_mfh, small_mfh, large_sfh, small_sfh))
+all_results <- map_dfr(dependent_vars, function(dep) {
+  
+  df <- trans_grid %>%
+    filter(densification == 1) %>%
+    dplyr::select(-c(densification, hmo, subdivision, office_rental,
+                     large_mfh, large_sfh, small_mfh, small_sfh))
+  df <- bind_cols(df, trans_grid %>% filter(densification == 1) %>% select(all_of(dep))) #reattach dependent variable
+  
+  names(df)[ncol(df)] <- dep #renames last column to current dependent variable name
+  
+  model <- glm(reformulate(" . - grid_id", dep), data = df, family = "binomial")
+  
+  pred <- predict(model, type = "response")
+  roc_obj <- roc(df[[dep]], pred)
+  auc_val <- as.numeric(auc(roc_obj))
+  r2_val <- pR2(model)["McFadden"]
+  f1_val <- calculate_optimal_f1(pred, df[[dep]])$f1
+  
+  coef_df <- tidy(model) %>%
+    filter(p.value < 0.05) %>%
+    select(term, estimate)
+  
+  metrics <- tibble(
+    term = c("AUC", "McFadden_R2", "F1"),
+    estimate = c(auc_val, r2_val, f1_val)
+  )
+  
+  bind_rows(coef_df, metrics) %>%
+    mutate(model = dep)
+})
 
-model_subdi <- glm(subdivision ~ .-grid_id, data = subdi_grid, family = "binomial")
-summary(model_subdi)
-pR2(model_subdi) #mcfadden
+# Order terms: coefficients first, indicators last ----
 
-pred <- predict(model_subdi, type = "response")
-roc <- roc(subdi_grid$subdivision, pred)
-auc(roc)
+indicator_order <- c("AUC", "McFadden_R2", "F1")
 
-result <- calculate_optimal_f1(pred, subdi_grid$subdivision)
-result$f1
-result$optimal_cutoff 
-    
-#AMONG DENSIFICATION PROJECTS - WERE HMO CONSTRUCTED?----
-hmo_grid <- trans_grid %>% 
-  filter(densification == 1) %>%
-  dplyr::select(-c(densification, subdivision, office_rental, large_mfh, small_mfh, large_sfh, small_sfh))
-model_hmo <- glm(hmo ~ .-grid_id, data = hmo_grid, family = "binomial")
-summary(model_hmo)
-pR2(model_hmo) #mcfadden
+wide_results <- all_results %>%
+  mutate(
+    estimate = round(estimate, 3),
+    is_indicator = term %in% indicator_order
+  ) %>%
+  arrange(is_indicator, term) %>%
+  pivot_wider(names_from = model, values_from = estimate)
 
-pred <- predict(model_hmo, type = "response")
-roc <- roc(hmo_grid$hmo, pred)
-auc(roc)
+# Build formatted flextable----
 
-result <- calculate_optimal_f1(pred, hmo_grid$hmo)
-result$f1
-result$optimal_cutoff 
+ft <- flextable(wide_results) %>%
+  set_header_labels(term = "Variable / Indicator")
 
-#AMONG DENSIFICATION PROJECTS - LARGE PROJECTS MFH?----
-mfhl_grid <- trans_grid %>% 
-  filter(densification == 1) %>%
-  dplyr::select(-c(densification, subdivision, office_rental, hmo, small_mfh, large_sfh, small_sfh))
-model_mfhl <- glm(large_mfh ~ .-grid_id, data = mfhl_grid, family = "binomial")
-summary(model_mfhl)
-pR2(model_mfhl) #mcfadden
+# Color coefficients only (exclude indicators)
+coef_rows <- which(!wide_results$is_indicator)
 
-pred <- predict(model_mfhl, type = "response")
-roc <- roc(mfhl_grid$large_mfh, pred)
-auc(roc)
+for (col in dependent_vars) {
+  ft <- color(ft, i = coef_rows[wide_results[[col]][coef_rows] > 0],
+              j = col, color = "green")
+  ft <- color(ft, i = coef_rows[wide_results[[col]][coef_rows] < 0],
+              j = col, color = "red")
+}
 
-result <- calculate_optimal_f1(pred, mfhl_grid$large_mfh)
-result$f1
-result$optimal_cutoff 
+# Style indicators (bold, gray background)
+ft <- ft %>%
+  bold(i = ~ term %in% indicator_order, bold = TRUE) %>%
+  bg(i = ~ term %in% indicator_order, bg = "#F0F0F0") %>%
+  autofit()
 
-#AMONG DENSIFICATION PROJECTS - LARGE PROJECTS SFH?----
-hmo_grid <- trans_grid %>% 
-  filter(densification == 1) %>%
-  dplyr::select(-c(densification, subdivision, office_rental, large_mfh, small_mfh, large_sfh, small_sfh))
-model_hmo <- glm(hmo ~ .-grid_id, data = hmo_grid, family = "binomial")
-summary(model_hmo)
-pR2(model_hmo) #mcfadden
+ft
 
-pred <- predict(model_hmo, type = "response")
-roc <- roc(hmo_grid$hmo, pred)
-auc(roc)
+#export final table to word----
+doc <- read_docx() %>%
+  body_add_par("Regression Results (grouped by dependent variable)", style = "heading 1") %>%
+  body_add_flextable(ft)
 
-result <- calculate_optimal_f1(pred, hmo_grid$hmo)
-result$f1
-result$optimal_cutoff 
-#AMONG DENSIFICATION PROJECTS - SMALL PROJECTS MFH?----
-hmo_grid <- trans_grid %>% 
-  filter(densification == 1) %>%
-  dplyr::select(-c(densification, subdivision, office_rental, large_mfh, small_mfh, large_sfh, small_sfh))
-model_hmo <- glm(hmo ~ .-grid_id, data = hmo_grid, family = "binomial")
-summary(model_hmo)
-pR2(model_hmo) #mcfadden
-
-pred <- predict(model_hmo, type = "response")
-roc <- roc(hmo_grid$hmo, pred)
-auc(roc)
-
-result <- calculate_optimal_f1(pred, hmo_grid$hmo)
-result$f1
-result$optimal_cutoff 
-#AMONG DENSIFICATION PROJECTS - SMALL PROJECTS SFH?----
-hmo_grid <- trans_grid %>% 
-  filter(densification == 1) %>%
-  dplyr::select(-c(densification, subdivision, office_rental, large_mfh, small_mfh, large_sfh, small_sfh))
-model_hmo <- glm(hmo ~ .-grid_id, data = hmo_grid, family = "binomial")
-summary(model_hmo)
-pR2(model_hmo) #mcfadden
-
-pred <- predict(model_hmo, type = "response")
-roc <- roc(hmo_grid$hmo, pred)
-auc(roc)
-
-result <- calculate_optimal_f1(pred, hmo_grid$hmo)
-result$f1
-result$optimal_cutoff 
-#AMONG DENSIFICATION PROJECTS - OFFICE-RENTAL?----
-hmo_grid <- trans_grid %>% 
-  filter(densification == 1) %>%
-  dplyr::select(-c(densification, subdivision, office_rental, large_mfh, small_mfh, large_sfh, small_sfh))
-model_hmo <- glm(hmo ~ .-grid_id, data = hmo_grid, family = "binomial")
-summary(model_hmo)
-pR2(model_hmo) #mcfadden
-
-pred <- predict(model_hmo, type = "response")
-roc <- roc(hmo_grid$hmo, pred)
-auc(roc)
-
-result <- calculate_optimal_f1(pred, hmo_grid$hmo)
-result$f1
-result$optimal_cutoff 
+print(doc, target = "model_results_grouped.docx")
