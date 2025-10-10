@@ -76,20 +76,19 @@ library(nngeo) #to identify nearest point
         across(6:31, as.numeric),
         across(6:31, replace_na, 0),
         p_pre1900 = bp_pre_1900 / all_properties,
-        p_1900_1918 = bp_1900_1918 / all_properties,
-        p_1919_1939 = (bp_1919_1929 + bp_1930_1939) / all_properties,
+        p_1900_1939 = (bp_1900_1918 + bp_1919_1929 + bp_1930_1939) / all_properties,
         p_1945_1999 = (bp_1945_1954 + bp_1955_1964 + bp_1965_1972 + bp_1973_1982 + bp_1983_1992 + bp_1993_1999) / all_properties,
         p_post2000 = (bp_2000_2008 + bp_2009 + bp_2010 + bp_2011) / all_properties,
         dominant_year = case_when(
-          p_pre1900 == pmax(p_pre1900, p_1900_1918, p_1919_1939, p_1945_1999, p_post2000, na.rm = TRUE) ~ "pre1900",
-          p_1900_1918 == pmax(p_pre1900, p_1900_1918, p_1919_1939, p_1945_1999, p_post2000, na.rm = TRUE) ~ "1900_1918",
-          p_1919_1939 == pmax(p_pre1900, p_1900_1918, p_1919_1939, p_1945_1999, p_post2000, na.rm = TRUE) ~ "1919_1939",
-          p_1945_1999 == pmax(p_pre1900, p_1900_1918, p_1919_1939, p_1945_1999, p_post2000, na.rm = TRUE) ~ "1945_1999",
-          p_post2000 == pmax(p_pre1900, p_1900_1918, p_1919_1939, p_1945_1999, p_post2000, na.rm = TRUE) ~ "post2000",
+          p_pre1900 == pmax(p_pre1900, p_1900_1939, p_1945_1999, p_post2000, na.rm = TRUE) ~ "pre1900",
+          p_1900_1939 == pmax(p_pre1900, p_1900_1939, p_1945_1999, p_post2000, na.rm = TRUE) ~ "1900_1939",
+          p_1945_1999 == pmax(p_pre1900, p_1900_1939, p_1945_1999, p_post2000, na.rm = TRUE) ~ "1945_1999",
+          p_post2000 == pmax(p_pre1900, p_1900_1939, p_1945_1999, p_post2000, na.rm = TRUE) ~ "post2000",
           TRUE ~ NA_character_
         ),
-        dominant_year = factor(dominant_year, levels = c("pre1900", "1900_1918", "1919_1939", "1945_1999", "post2000"), ordered = TRUE)) %>%
+        dominant_year = factor(dominant_year, levels = c("pre1900", "1900_1939", "1945_1999", "post2000"), ordered = TRUE)) %>%
       select(LSOA11CD, dominant_year)
+    
   #00.5 Deprivation and income----
     depri <- read.csv("England/Drivers Liverpool/English_Welsh_Deprivation/File_1_ID_2015_Index_of_Multiple_Deprivation.csv") %>% 
       select(c(1,5,6)) %>% 
@@ -135,7 +134,7 @@ library(nngeo) #to identify nearest point
     
   #00.7 Socio-economic neighborhood type----
     oa_c <- read_sf("England/OA Classification/2011_OAC.shp") %>%
-      select(c(GRP, SUBGRP)) #group and subgroup
+      select(c(SPRGRP, GRP, SUBGRP)) 
       
     
 #01 Amenities in 500m neighborhood ----
@@ -264,14 +263,14 @@ library(nngeo) #to identify nearest point
   
 #11 OA Classification ----
 
-  centroids_joined <- st_join(st_centroid(dens_grid), oa_c, join = st_within)
+  centroids_joined <- st_join(dens_grid %>% st_centroid() %>% select(grid_id), oa_c, join = st_within)
   dens_grid <- dens_grid %>%
     left_join(st_drop_geometry(centroids_joined),
               by = "grid_id")
   
-#11 Mark grid cells in built-up area ----
+#12 Mark grid cells in built-up area ----
   dens_grid <- dens_grid %>% mutate(builtup2011 = as.integer(lengths(st_intersects(., builtup)) > 0))
   
-#12 Export ----
+#13 Export ----
   st_write(dens_grid, "C:/Users/Vera/Documents/SUBDENSE/Projects/Liverpool_Dembski/R Output/grid_full.gpkg")
   
