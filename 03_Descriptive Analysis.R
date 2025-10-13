@@ -9,7 +9,7 @@ library(corrplot)
 library(svglite)
 
 # dens_grid <- st_read("C:/Users/Vera/Documents/SUBDENSE/Projects/Liverpool_Dembski/R Output/grid_full.gpkg") %>% st_drop_geometry() #Pfad Vera
-dens_grid <- st_read("G:/ai_daten/P1047_SUBDENSE/liverpool_paper/01_data_input/in_vera/grid_full.gpkg") %>% st_drop_geometry() #Pfad Denise
+dens_grid <- st_read("G:/ai_daten/P1047_SUBDENSE/liverpool_paper/01_data_input/in_vera/251013/grid_full.gpkg") %>% st_drop_geometry() #Pfad Denise
 
 #reduce to grid cells in built-up area 2011
 dens_grid <- dens_grid %>% filter(builtup2011 == 1) %>% 
@@ -54,6 +54,9 @@ dat_plot <- cells %>%
          share_cells = count_cells/count_all_cells,
          count_all_units = sum(count_units),
          share_units = count_units/count_all_units)
+
+dat_plot$type <- ordered(dat_plot$type,
+                         levels = c("large_mfh", "small_mfh", "large_sfh",  "small_sfh", "hmo","subdivision", "office_rental"))
   
 ##table
 table <- dat_plot %>% 
@@ -84,16 +87,29 @@ dat_plot %>%
 
 #prepare data explanatory variables
 dat_explanatory <- dens_grid %>% 
-  pivot_longer(cols = hmo:subdivision, 
+  mutate(no_dens = if_else(hmo == 0 & #here we create the negative group for comparison
+                             office_rental == 0 &
+                             subdivision == 0 &
+                             large_mfh == 0 &
+                             small_mfh == 0 &
+                             large_sfh == 0 &
+                             small_sfh == 0, 1, 0), 
+         no_dens = if_else(is.na(no_dens), 1, 0)) %>%  # ask Vera if this is correct
+  pivot_longer(cols = c(hmo, office_rental, subdivision, large_mfh, small_mfh, large_sfh, small_sfh, no_dens),   
                names_to = "type", 
                values_to = "type_0_1") %>% 
   filter(type_0_1 == 1) %>% 
-  select(addresses_2013:income_rank, oac_challenged:type_0_1)
+  select(addresses_2013:income_rank, oac_challenged:type_0_1) %>% 
+  mutate(min_to_livmain = if_else(min_to_livmain >50, 50, min_to_livmain)) #there is one outlier in the nodense group which we exclude
+  
+
+dat_explanatory$type <- ordered(dat_explanatory$type,
+                         levels = c("no_dens", "large_mfh", "small_mfh", "large_sfh",  "small_sfh", "hmo","subdivision", "office_rental"))
 
 # plot for all numeric variables
 
 # where to save
-out_dir <- "G:/ai_daten/P1047_SUBDENSE/liverpool_paper/figures"
+out_dir <- "G:/ai_daten/P1047_SUBDENSE/exchange_tarox/liverpool/boxplots"
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
 # pick the numeric columns to plot on the x-axis
@@ -114,7 +130,7 @@ make_box <- function(df, x_var, y_var = "type") {
 purrr::walk(num_vars, function(v) {
   p <- make_box(dat_explanatory, v)
   
-  # optional: sanitize filename a bit
+  # filename
   fname <- paste0(gsub("[^[:alnum:]_]+", "_", v), ".svg")
   
   ggsave(
@@ -146,7 +162,7 @@ m_to_train <-
   geom_boxplot()+
   theme_light()+
   ylab("")
-
+m_to_train
 income_rank <- 
   dat_explanatory %>% 
   ggplot(aes(x = income_rank, y = type))+
