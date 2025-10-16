@@ -45,14 +45,11 @@ library(tidyr)
   #import LUCS data where J = Offices and K = Retail
   lucs <- st_read("England/LUCS/lucs_liv.gpkg") %>% 
     st_drop_geometry() %>%
-    select(c(fid_os, V_FROM_CODE)) %>%
-    filter(V_FROM_CODE == "J" | V_FROM_CODE == "K") %>% #filter to conversions
-    mutate(
-      office_retail = if_else(V_FROM_CODE == 'J' | V_FROM_CODE == 'K', 1, 0)
-    ) %>%
-    select(-V_FROM_CODE)
+    select(c(fid_os, V_FROM_CODE, LUCS_FROM_CODE, COMPLETIONS, CONVERSIONS_TORESIDENTIAL)) %>%
+    filter(V_FROM_CODE == "J" | V_FROM_CODE == "K"|LUCS_FROM_CODE == "J" | LUCS_FROM_CODE == "K") %>% #filter to conversions
+    mutate(office_retail = 1) %>%
+    select(-V_FROM_CODE, -LUCS_FROM_CODE)
   
-
 #00 Read Data Denise----
   setwd("G:/ai_daten/P1047_SUBDENSE/liverpool_paper")
   
@@ -282,7 +279,21 @@ library(tidyr)
   
   dens_grid <- count
   dens_grid <- left_join(dens_grid, grid, by = "grid_id") #re-attach geometry
-  dens_grid <- st_as_sf(dens_grid, sf_column_name = "geom")
+  dens_grid <- st_as_sf(dens_grid, sf_column_name = "geometry")
+
+  #for comparison, add the office retail conversion count from the lucs data? 
+  lucs <- st_read("England/LUCS/lucs_liv.gpkg") %>% 
+    select(c(V_FROM_CODE, LUCS_FROM_CODE, COMPLETIONS, CONVERSIONS_TORESIDENTIAL)) %>%
+    filter(V_FROM_CODE == "J" | V_FROM_CODE == "K"|LUCS_FROM_CODE == "J" | LUCS_FROM_CODE == "K") %>% #filter to conversions
+    mutate(count = COMPLETIONS + CONVERSIONS_TORESIDENTIAL) %>%
+    select(count)
+  
+  dens_grid_joined <- aggregate(lucs["count"], dens_grid, sum)
+  
+  dens_grid_joined <- dens_grid %>%
+    mutate(lucs_count = dens_grid_joined$count)
+  
+  dens_grid <- dens_grid_joined
   
   st_write(dens_grid, "C:/Users/Vera/Documents/SUBDENSE/Projects/Liverpool_Dembski/R Output/grid_depvar.gpkg")
   
