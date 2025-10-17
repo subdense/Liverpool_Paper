@@ -1,0 +1,395 @@
+---
+title: "Explanatory variables maps"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+  word_document: default
+  pdf_document:
+    toc: true
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r load packages, include=FALSE}
+library(sf)
+library(ggplot2)
+library(dplyr)
+library(classInt)
+```
+
+
+```{r read data, include=FALSE}
+liv_outline <- st_read("G:/ai_daten/P1047_SUBDENSE/liverpool_paper/01_data_input/liverpool_metropolitan_dissolved.gpkg")
+dens_grid_geom <- st_read("G:/ai_daten/P1047_SUBDENSE/liverpool_paper/01_data_input/in_vera/251017/grid_full.gpkg")
+```
+
+```{r, include=FALSE}
+# Data preparation
+data <- dens_grid_geom %>% filter(builtup2011 == 1) %>% 
+  mutate(oac_constrained = as.numeric(ifelse(SPRGRP == "7",1,0)),
+         oac_cosmopolitan = as.numeric(ifelse(SPRGRP == "2",1,0)),
+         oac_ethnicentral = as.numeric(ifelse(SPRGRP == "3",1,0)),
+         oac_hardpressed = as.numeric(ifelse(SPRGRP == "8",1,0)),
+         oac_suburban = as.numeric(ifelse(SPRGRP == "6",1,0))) %>% 
+  select(amenity_count:deprivation, p_pre1919:oac_suburban) %>% 
+  select(-m_to_park, -nb11_MDcount, -LSOA11CD, -Rank) %>% 
+    mutate(min_to_livmain = if_else(min_to_livmain>50, 50, min_to_livmain)) 
+
+names(data)
+```
+
+
+```{r, include=FALSE}
+# Function for maps numeric using jenks/fisher
+compute_fisher <- function(dataset, var) {
+  
+x  <- dplyr::pull(dataset, {{ var }})   # <<— correct column extraction
+  
+jenks <- classIntervals(x, n = 5, style = "fisher")
+
+labels <- paste0(
+  round(jenks$brks[-length(jenks$brks)], 0), "–", 
+  round(jenks$brks[-1], 0), unit
+)
+
+dataset$jenks_group <- cut(
+  x,
+  breaks = jenks$brks,
+  include.lowest = TRUE,
+  labels = labels
+)
+
+dataset_new <- dataset
+
+dataset_new
+}
+```
+
+# Maps explanatory variables
+## Minutes to train
+
+```{r, echo=FALSE, warning=FALSE}
+var_name <- "Minutes to train"
+unit <- " min"
+
+dataset_new <- compute_fisher(data, m_to_train)
+
+ggplot(dataset_new) +
+  geom_sf(aes(fill = jenks_group), color = NA) +
+  scale_fill_viridis_d(option = "plasma", 
+                       direction = 1, 
+                       name = var_name) +
+  theme_minimal()+
+  geom_sf(data = liv_outline, fill = NA, color = "grey", size = 0.1) +
+    theme(
+    axis.text = element_blank(),    # remove numbers
+    axis.ticks = element_blank(),   # remove tick marks
+    axis.title = element_blank()    # remove axis titles
+  )
+```
+
+## Minutes to Liverpool center
+
+```{r, echo=FALSE, warning=FALSE}
+var_name <- "Minutes to Liverpool center"
+unit <- " min"
+
+dataset_new <- compute_fisher(data, min_to_livmain)
+
+ggplot(dataset_new) +
+  geom_sf(aes(fill = jenks_group), color = NA) +
+  scale_fill_viridis_d(option = "plasma", 
+                       direction = 1, 
+                       name = var_name) +
+  theme_minimal()+
+  geom_sf(data = liv_outline, fill = NA, color = "grey", size = 0.1) +
+    theme(
+    axis.text = element_blank(),    # remove numbers
+    axis.ticks = element_blank(),   # remove tick marks
+    axis.title = element_blank()    # remove axis titles
+  )
+```
+
+
+## Amenity count
+
+```{r, echo=FALSE, warning=FALSE}
+var_name <- "Amenity count"
+unit <- " "
+
+dataset_new <- compute_fisher(data, amenity_count)
+
+ggplot(dataset_new) +
+  geom_sf(aes(fill = jenks_group), color = NA) +
+  scale_fill_viridis_d(option = "viridis", 
+                       direction = -1, 
+                       name = var_name) +
+  theme_minimal()+
+  geom_sf(data = liv_outline, fill = NA, color = "grey", size = 0.1) +
+    theme(
+    axis.text = element_blank(),    # remove numbers
+    axis.ticks = element_blank(),   # remove tick marks
+    axis.title = element_blank()    # remove axis titles
+  )
+```
+
+## No. low density neighbors
+
+```{r, echo=FALSE, warning=FALSE}
+var_name <- "No. low density neighbors"
+unit <- " "
+
+dataset_new <- compute_fisher(data, nb11_LDcount)
+
+ggplot(dataset_new) +
+  geom_sf(aes(fill = jenks_group), color = NA) +
+  scale_fill_viridis_d(option = "viridis", 
+                       direction = -1, 
+                       name = var_name) +
+  theme_minimal()+
+  geom_sf(data = liv_outline, fill = NA, color = "grey", size = 0.1) +
+    theme(
+    axis.text = element_blank(),    # remove numbers
+    axis.ticks = element_blank(),   # remove tick marks
+    axis.title = element_blank()    # remove axis titles
+  )
+```
+
+## No. high density neighbors
+
+```{r, echo=FALSE, warning=FALSE}
+var_name <- "No. high density neighbors"
+unit <- " "
+
+dataset_new <- compute_fisher(data, nb11_HDcount)
+
+ggplot(dataset_new) +
+  geom_sf(aes(fill = jenks_group), color = NA) +
+  scale_fill_viridis_d(option = "viridis", 
+                       direction = -1, 
+                       name = var_name) +
+  theme_minimal()+
+  geom_sf(data = liv_outline, fill = NA, color = "grey", size = 0.1) +
+    theme(
+    axis.text = element_blank(),    # remove numbers
+    axis.ticks = element_blank(),   # remove tick marks
+    axis.title = element_blank()    # remove axis titles
+  )
+```
+
+## No. NB count
+
+```{r, echo=FALSE, warning=FALSE}
+var_name <- "No. NB count"
+unit <- " "
+
+dataset_new <- compute_fisher(data, nb11_NBcount)
+
+ggplot(dataset_new) +
+  geom_sf(aes(fill = jenks_group), color = NA) +
+  scale_fill_viridis_d(option = "viridis", 
+                       direction = -1, 
+                       name = var_name) +
+  theme_minimal()+
+  geom_sf(data = liv_outline, fill = NA, color = "grey", size = 0.1) +
+    theme(
+    axis.text = element_blank(),    # remove numbers
+    axis.ticks = element_blank(),   # remove tick marks
+    axis.title = element_blank()    # remove axis titles
+  )
+```
+
+## Level of deprivation
+
+```{r, echo=FALSE, warning=FALSE}
+var_name <- "Level of deprivation"
+unit <- " "
+
+dataset_new <- compute_fisher(data, deprivation)
+
+ggplot(dataset_new) +
+  geom_sf(aes(fill = jenks_group), color = NA) +
+  scale_fill_viridis_d(option = "magma", 
+                       direction = 1, 
+                       name = var_name) +
+  theme_minimal()+
+  geom_sf(data = liv_outline, fill = NA, color = "grey", size = 0.1) +
+    theme(
+    axis.text = element_blank(),    # remove numbers
+    axis.ticks = element_blank(),   # remove tick marks
+    axis.title = element_blank()    # remove axis titles
+  )
+```
+
+
+## SFH Share
+
+```{r, echo=FALSE, warning=FALSE}
+var_name <- "SFH Share"
+unit <- " %"
+
+data %>% 
+  ggplot()+
+  geom_sf(aes(fill = sfh_share), color = NA)+
+  scale_fill_viridis_c(option = "plasma", direction = -1  ) +     # use -1 to reverse
+  theme_minimal()+
+  geom_sf(data = liv_outline, fill = NA, color = "grey", size = 0.1) +
+    theme(
+    axis.text = element_blank(),    # remove numbers
+    axis.ticks = element_blank(),   # remove tick marks
+    axis.title = element_blank()    # remove axis titles
+  )
+```
+
+## Perc. buildings pre 1919
+
+```{r, echo=FALSE, warning=FALSE}
+var_name <- "erc. buildings pre 1919"
+unit <- " %"
+
+data %>% 
+  ggplot()+
+  geom_sf(aes(fill = p_pre1919), color = NA)+
+  scale_fill_viridis_c(option = "plasma", direction = -1  ) +     # use -1 to reverse
+  theme_minimal()+
+  geom_sf(data = liv_outline, fill = NA, color = "grey", size = 0.1) +
+    theme(
+    axis.text = element_blank(),    # remove numbers
+    axis.ticks = element_blank(),   # remove tick marks
+    axis.title = element_blank()    # remove axis titles
+  )
+```
+
+## dens_group11
+
+```{r, echo=FALSE, warning=FALSE}
+var_name <- "dens_group11"
+unit <- " "
+
+data %>% 
+  ggplot()+
+  geom_sf(aes(fill = dens_group11), color = NA)+
+  scale_fill_manual(
+      values = c(
+      "NB" = "grey80",
+      "LD" = "#99d594",  # light yellow-green (viridis-like)
+      "MD" = "#ffffbf",  # medium green
+      "HD" = "#fc8d59"),   # dark teal
+  breaks = c("NB", "LD", "MD", "HD"),
+  name = "Density group"
+) +
+    theme_minimal()+
+  geom_sf(data = liv_outline, fill = NA, color = "grey", size = 0.1) +
+    theme(
+    axis.text = element_blank(),    # remove numbers
+    axis.ticks = element_blank(),   # remove tick marks
+    axis.title = element_blank()    # remove axis titles
+  )
+```
+
+## oac_constrained
+
+```{r, echo=FALSE, warning=FALSE}
+data %>% 
+  mutate(oac_constrained = as.factor(oac_constrained)) %>% 
+  ggplot()+
+  geom_sf(aes(fill = oac_constrained), color = NA)+
+  scale_fill_manual(
+    values = c("0" = "grey80", "1" = "#1f78b4"),  # pick any colors
+    name = "OAC Constrained"
+  ) +
+    theme_minimal()+
+  geom_sf(data = liv_outline, fill = NA, color = "grey", size = 0.1) +
+    theme(
+    axis.text = element_blank(),    # remove numbers
+    axis.ticks = element_blank(),   # remove tick marks
+    axis.title = element_blank()    # remove axis titles
+  )
+```
+
+## oac_cosmopolitan
+
+```{r, echo=FALSE, warning=FALSE}
+data %>% 
+  mutate(oac_cosmopolitan = as.factor(oac_cosmopolitan)) %>% 
+  ggplot()+
+  geom_sf(aes(fill = oac_cosmopolitan), color = NA)+
+  scale_fill_manual(
+    values = c("0" = "grey80", "1" = "#1f78b4"),  # pick any colors
+    name = "OAC Cosmopolitan"
+  ) +
+    theme_minimal()+
+  geom_sf(data = liv_outline, fill = NA, color = "grey", size = 0.1) +
+    theme(
+    axis.text = element_blank(),    # remove numbers
+    axis.ticks = element_blank(),   # remove tick marks
+    axis.title = element_blank()    # remove axis titles
+  )
+```
+
+## oac_ethnicentral
+
+```{r, echo=FALSE, warning=FALSE}
+data %>% 
+  mutate(oac_ethnicentral = as.factor(oac_ethnicentral)) %>% 
+  ggplot()+
+  geom_sf(aes(fill = oac_ethnicentral), color = NA)+
+  scale_fill_manual(
+    values = c("0" = "grey80", "1" = "#1f78b4"),  # pick any colors
+    name = "OAC Ethnicentral"
+  ) +
+    theme_minimal()+
+  geom_sf(data = liv_outline, fill = NA, color = "grey", size = 0.1) +
+    theme(
+    axis.text = element_blank(),    # remove numbers
+    axis.ticks = element_blank(),   # remove tick marks
+    axis.title = element_blank()    # remove axis titles
+  )
+```
+
+
+## oac_hardpressed
+
+```{r, echo=FALSE, warning=FALSE}
+data %>% 
+  mutate(oac_hardpressed = as.factor(oac_hardpressed)) %>% 
+  ggplot()+
+  geom_sf(aes(fill = oac_hardpressed), color = NA)+
+  scale_fill_manual(
+    values = c("0" = "grey80", "1" = "#1f78b4"),  # pick any colors
+    name = "OAC Hardpressed"
+  ) +
+    theme_minimal()+
+  geom_sf(data = liv_outline, fill = NA, color = "grey", size = 0.1) +
+    theme(
+    axis.text = element_blank(),    # remove numbers
+    axis.ticks = element_blank(),   # remove tick marks
+    axis.title = element_blank()    # remove axis titles
+  )
+```
+
+## oac_suburban
+
+```{r, echo=FALSE, warning=FALSE}
+data %>% 
+  mutate(oac_suburban = as.factor(oac_suburban)) %>% 
+  ggplot()+
+  geom_sf(aes(fill = oac_suburban), color = NA)+
+  scale_fill_manual(
+    values = c("0" = "grey80", "1" = "#1f78b4"),  # pick any colors
+    name = "OAC Suburban"
+  ) +
+    theme_minimal()+
+  geom_sf(data = liv_outline, fill = NA, color = "grey", size = 0.1) +
+    theme(
+    axis.text = element_blank(),    # remove numbers
+    axis.ticks = element_blank(),   # remove tick marks
+    axis.title = element_blank()    # remove axis titles
+  )
+```
+
+
+
+
