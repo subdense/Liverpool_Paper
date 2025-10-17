@@ -32,7 +32,7 @@ knitr::opts_knit$set(root.dir = normalizePath(my_wd_all_dat))
 
 ```{r read data, include=FALSE}
 # dens_grid <- st_read("C:/Users/Vera/Documents/SUBDENSE/Projects/Liverpool_Dembski/R Output/grid_full.gpkg") %>% st_drop_geometry() #Pfad Vera
-data_raw <- st_read("G:/ai_daten/P1047_SUBDENSE/liverpool_paper/01_data_input/in_vera/grid_full.gpkg")  #Pfad Denise
+data_raw <- st_read("G:/ai_daten/P1047_SUBDENSE/liverpool_paper/01_data_input/in_vera/251013/grid_full.gpkg")  #Pfad Denise
 
 
 # par_with_dep_raw <- st_read("G:/ai_daten/P1070_USBW/MbE_MUC/workfiles_03_git/data_prep_output/parcels_10_final_data.gpkg") 

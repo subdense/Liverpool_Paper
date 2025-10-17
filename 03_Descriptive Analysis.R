@@ -9,7 +9,7 @@ library(corrplot)
 library(svglite)
 
 # dens_grid <- st_read("C:/Users/Vera/Documents/SUBDENSE/Projects/Liverpool_Dembski/R Output/grid_full.gpkg") %>% st_drop_geometry() #Pfad Vera
-dens_grid <- st_read("G:/ai_daten/P1047_SUBDENSE/liverpool_paper/01_data_input/in_vera/251013/grid_full.gpkg") %>% st_drop_geometry() #Pfad Denise
+dens_grid <- st_read("G:/ai_daten/P1047_SUBDENSE/liverpool_paper/01_data_input/in_vera/251017/grid_full.gpkg") %>% st_drop_geometry() #Pfad Denise
 
 #reduce to grid cells in built-up area 2011
 dens_grid <- dens_grid %>% filter(builtup2011 == 1) %>% 
@@ -99,8 +99,9 @@ dat_explanatory <- dens_grid %>%
                names_to = "type", 
                values_to = "type_0_1") %>% 
   filter(type_0_1 == 1) %>% 
-  select(addresses_2013:income_rank, oac_challenged:type_0_1) %>% 
-  mutate(min_to_livmain = if_else(min_to_livmain >50, 50, min_to_livmain)) #there is one outlier in the nodense group which we exclude
+  select(addresses_2013:income_rank, oac_challenged:type_0_1, p_pre1919) %>% 
+  mutate(min_to_livmain = if_else(min_to_livmain >50, 50, min_to_livmain), #there is one outlier in the nodense group which we exclude
+         amenity_count = if_else(amenity_count > 100, 100, amenity_count)) 
   
 
 dat_explanatory$type <- ordered(dat_explanatory$type,
@@ -146,6 +147,9 @@ purrr::walk(num_vars, function(v) {
 })
 
 ----------------
+  
+  
+  ------------
 
 dat_explanatory %>% 
   ggplot(aes(x = m_to_train))+
