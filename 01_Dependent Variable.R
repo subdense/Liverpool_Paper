@@ -46,7 +46,7 @@ library(tidyr)
   lucs <- st_read("England/LUCS/lucs_liv.gpkg") %>% 
     st_drop_geometry() %>%
     select(c(fid_os, V_FROM_CODE, LUCS_FROM_CODE, COMPLETIONS, CONVERSIONS_TORESIDENTIAL)) %>%
-    filter(V_FROM_CODE == "J" | V_FROM_CODE == "K"|LUCS_FROM_CODE == "J" | LUCS_FROM_CODE == "K") %>% #filter to conversions
+    filter(LUCS_FROM_CODE == "J" | LUCS_FROM_CODE == "K") %>% #filter to conversions
     mutate(office_retail = 1) %>%
     select(-V_FROM_CODE, -LUCS_FROM_CODE)
   
@@ -284,7 +284,7 @@ library(tidyr)
   #for comparison, add the office retail conversion count from the lucs data? 
   lucs <- st_read("England/LUCS/lucs_liv.gpkg") %>% 
     select(c(V_FROM_CODE, LUCS_FROM_CODE, COMPLETIONS, CONVERSIONS_TORESIDENTIAL)) %>%
-    filter(V_FROM_CODE == "J" | V_FROM_CODE == "K"|LUCS_FROM_CODE == "J" | LUCS_FROM_CODE == "K") %>% #filter to conversions
+    filter(LUCS_FROM_CODE == "J" | LUCS_FROM_CODE == "K") %>% #filter to conversions
     mutate(count = COMPLETIONS + CONVERSIONS_TORESIDENTIAL) %>%
     select(count)
   
