@@ -26,20 +26,24 @@ setwd("C:/Users/Vera/Documents/SUBDENSE")
 #dens_grid <- st_read("G:/ai_daten/P1047_SUBDENSE/liverpool_paper/Projects/Liverpool_Dembski/R Outputs/grid_full.gpkg") %>% #Pfad Denise
 dens_grid <- st_read("Projects/Liverpool_Dembski/R Output/grid_full.gpkg") %>% 
   filter(builtup2011 == 1) %>% #from now on only interested in cells in builtup area
+  #all cells that don't overlap with special non-residential land uses have NA but should be 0
+  mutate(across(c(nature,agriculture, industry, water,sports,parks,port,airport,dump,rail), ~ replace_na(.x, 0))) %>%
+  filter(nature != 1 & agriculture != 1 & water != 1 & airport != 1 & dump != 1 & rail != 1) %>%
   st_drop_geometry() 
 
 #Transform variables----
 trans_grid <- dens_grid %>% 
   mutate(
+    across(c(
+      subdivision, hmo, office_rental, 
+      large_mfh, small_mfh, large_sfh, small_sfh, addresses_2013, sfh_share), ~ replace_na(.x, 0)),
+      
     #make densification factor
     densification = if_any(c(hmo, office_rental, large_mfh, small_mfh, large_sfh, small_sfh, subdivision), ~ .x == 1) %>% as.integer(),
     densification = as.factor(densification),
     
     #dist to train, standardized with cutoff at 5 km
     scaled_disttrain = as.numeric(scale(pmin(m_to_train, 800))),
-
-    #dist to park 
-    scaled_distpark = as.numeric(scale(pmin(m_to_park, 2000))),
     
     #dist center
     scaled_distcenter = as.numeric(scale(min_to_livmain)),
@@ -58,9 +62,8 @@ trans_grid <- dens_grid %>%
     #sfh share in neighborhood (decided to go dichotomous)
     dich_sfh = as.numeric(ifelse(sfh_share > 0.5, 1, 0)),
     
-    #deprivation and income
-    scaled_incomerank = as.numeric(scale(income_rank)),
-    #deprivation = deprivation/max(deprivation),
+    #deprivation
+    scaled_deprivation = scale(deprivation),
 
     #output area classification
     oac_constrained = as.numeric(ifelse(SPRGRP == "7",1,0)),
@@ -70,39 +73,23 @@ trans_grid <- dens_grid %>%
     oac_suburban = as.numeric(ifelse(SPRGRP == "6",1,0)),
     
     #building age
-    dominant_year = fct_relevel(dominant_year, "1945_1999"), #back to unordered factor and set post war as reference 
-
-    #all land use variables turn into dichotomous. i do not scale binary variables
-    dich_unlikely = as.numeric(ifelse(water > 0 |
-                                                     rail > 0 |
-                                                     airport > 0 |
-                                                     dump > 0, 1, 0)),
-    dich_park = as.numeric(ifelse(parks > 0, 1, 0)),
-    dich_sports = as.numeric(ifelse(sports > 0, 1, 0)),
-    dich_industry = as.numeric(ifelse(industry > 0, 1, 0)),
-    dich_port = as.numeric(ifelse(port > 0, 1, 0)),
-    dich_nature = as.numeric(ifelse(nature > 0, 1, 0)),
-    dich_agriculture = as.numeric(ifelse(agriculture > 0, 1, 0))
+    #can you scale a share? 
+    share_pre1919bld = p_pre1919
   ) %>%
   
   dplyr::select(grid_id, densification, 
          subdivision, hmo, office_rental, large_mfh, small_mfh, large_sfh, small_sfh,
-         scaled_disttrain, scaled_distpark, scaled_distcenter,
+         scaled_disttrain, scaled_distcenter,
          scaled_logdensity,
          scaled_logamenities, 
          scaled_hd_nb, scaled_ld_nb, scaled_ub_nb,
-         dominant_year,
+         share_pre1919bld,
          oac_constrained, oac_cosmopolitan, oac_ethnicentral, oac_hardpressed, oac_suburban,
-         scaled_incomerank,
-         dich_sfh, 
-         dich_unlikely, dich_park, dich_sports, dich_industry, dich_port, dich_nature, dich_agriculture
-  ) %>%
-  
-  #finally, all cells that don't overlap with special non-residential land uses have NA but should be 0
-  mutate(across(c(dich_unlikely, dich_park, dich_sports, dich_industry, dich_port, dich_nature, dich_agriculture), ~ replace_na(.x, 0)))
-  #all other NA values are because the cell did not have any address data at any point
+         scaled_deprivation,
+         dich_sfh 
+  )  
 
-sapply(trans_grid,function(x) sum(is.na(x)))
+sapply(trans_grid,function(x) sum(is.na(x))) #all NA values are because the cell did not have any address data at any point
 trans_grid <- na.omit(trans_grid)
 
 
@@ -142,6 +129,13 @@ pR2(model_plain) #mcfadden
 
 avg_effects <- avg_slopes(model_plain)
 avg_effects
+
+pred <- predict(model_plain, type = "response")
+roc_obj <- roc(plain_grid$densification, pred)
+auc(roc_obj)
+calculate_optimal_f1(pred, plain_grid$densification)
+
+
 #Run models for densification types ----
 dependent_vars <- c("subdivision", "hmo", "office_rental", "large_mfh", "small_mfh", "large_sfh", "small_sfh")
 
@@ -216,4 +210,4 @@ doc <- read_docx() %>%
   body_add_par("Regression Results (grouped by dependent variable)", style = "heading 1") %>%
   body_add_flextable(ft)
 
-print(doc, target = "model_results_grouped.docx")
+print(doc, target = "Projects/Liverpool_Dembski/R Export/model_results_grouped.docx")

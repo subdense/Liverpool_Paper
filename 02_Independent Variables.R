@@ -73,21 +73,12 @@ library(nngeo) #to identify nearest point
       rename(LSOA11CD = ecode) %>%
       #regrouping the construction periods
       mutate(
-        across(6:31, as.numeric),
-        across(6:31, replace_na, 0),
-        p_pre1900 = bp_pre_1900 / all_properties,
-        p_1900_1939 = (bp_1900_1918 + bp_1919_1929 + bp_1930_1939) / all_properties,
-        p_1945_1999 = (bp_1945_1954 + bp_1955_1964 + bp_1965_1972 + bp_1973_1982 + bp_1983_1992 + bp_1993_1999) / all_properties,
-        p_post2000 = (bp_2000_2008 + bp_2009 + bp_2010 + bp_2011) / all_properties,
-        dominant_year = case_when(
-          p_pre1900 == pmax(p_pre1900, p_1900_1939, p_1945_1999, p_post2000, na.rm = TRUE) ~ "pre1900",
-          p_1900_1939 == pmax(p_pre1900, p_1900_1939, p_1945_1999, p_post2000, na.rm = TRUE) ~ "1900_1939",
-          p_1945_1999 == pmax(p_pre1900, p_1900_1939, p_1945_1999, p_post2000, na.rm = TRUE) ~ "1945_1999",
-          p_post2000 == pmax(p_pre1900, p_1900_1939, p_1945_1999, p_post2000, na.rm = TRUE) ~ "post2000",
-          TRUE ~ NA_character_
-        ),
-        dominant_year = factor(dominant_year, levels = c("pre1900", "1900_1939", "1945_1999", "post2000"), ordered = TRUE)) %>%
-      select(LSOA11CD, dominant_year)
+        across(6:31, as.numeric), 
+        across(6:31, replace_na, 0), 
+        p_pre1919 = (bp_pre_1900 + bp_1900_1918) / all_properties
+        ) %>%
+      filter(p_pre1919 <= 1) %>%
+      select(LSOA11CD, p_pre1919)
     
   #00.5 Deprivation and income----
     depri <- read.csv("England/Drivers Liverpool/English_Welsh_Deprivation/File_1_ID_2015_Index_of_Multiple_Deprivation.csv") %>% 
@@ -172,14 +163,9 @@ library(nngeo) #to identify nearest point
   
 #04 Driving distance to Liverpool Central Station ----
   dens_grid <- st_join(dens_grid, regacc_ors, join = st_nearest_feature)
-  
-  
-  
-#05 Deprivation and Income level ----
-  dens_grid <- left_join(dens_grid, depri, by = "LSOA11CD")
-  dens_grid <- left_join(dens_grid, income, by = "LSOA11CD")
-  
-#07 Landuse ----
+
+
+#05 Landuse ----
   #Intersect landuse with grid and calculate share of each type----
   intersection <- st_intersection(dens_grid, landuse)
   intersection$area <- st_area(intersection)
@@ -199,7 +185,7 @@ library(nngeo) #to identify nearest point
   dens_grid <- left_join(dens_grid, landuse_wide, by = "grid_id")
   rm(intersection, landuse_summary, landuse_wide)
   
-#08 Neighborhood density ----
+#06 Neighborhood density ----
   #partition into natural breaks LD-MD-HD and NB based on address count 2011----
   filtered_data <- dens_grid %>% filter(addresses_2013 > 0) 
   #breaks <- classInt::classIntervals(filtered_data$addresses_2013, n = 3, style = "jenks")[["brks"]][-1]
@@ -234,7 +220,7 @@ library(nngeo) #to identify nearest point
   dens_grid <- left_join(dens_grid, nb_counts, by = "grid_id")
   rm(buffer_df, dens_groups, filtered_data, nb_counts)
   
-#09 Share SFH in 3x3 cell neighborhood 2013 ----
+#07 Share SFH in 3x3 cell neighborhood 2013 ----
   hunits <- read_sf("C:/Users/Vera/Documents/SUBDENSE/Projects/Liverpool_Dembski/R Output/classified_addresses.gpkg") %>%
     filter(hunits_2013 > 0) %>%
     select(c(sfh_2013, hunits_2013))
@@ -252,7 +238,7 @@ library(nngeo) #to identify nearest point
   dens_grid <- left_join(dens_grid, sfh_counts, by = "grid_id")
   rm(hunits_2013, buffer_df, sfh_counts, sfh_intersect)
   
-#10 Building age ----
+#08 Building age ----
   #ADD LSOA CODE TO DENS GRID
   grid_lsoa <- st_join(grid_centroids, lsoa) %>% st_drop_geometry()
   dens_grid <- left_join(dens_grid, grid_lsoa, by = "grid_id")
@@ -260,17 +246,19 @@ library(nngeo) #to identify nearest point
   #JOIN BUILDING AGE USING LSOA CODES
   dens_grid <- left_join(dens_grid, age, by = "LSOA11CD")
   
+#09 Deprivation and Income level ----
+  dens_grid <- left_join(dens_grid, depri, by = "LSOA11CD")
+  dens_grid <- left_join(dens_grid, income, by = "LSOA11CD")  
   
-#11 OA Classification ----
-
+#10 OA Classification ----
   centroids_joined <- st_join(dens_grid %>% st_centroid() %>% select(grid_id), oa_c, join = st_within)
   dens_grid <- dens_grid %>%
     left_join(st_drop_geometry(centroids_joined),
               by = "grid_id")
   
-#12 Mark grid cells in built-up area ----
+#11 Mark grid cells in built-up area ----
   dens_grid <- dens_grid %>% mutate(builtup2011 = as.integer(lengths(st_intersects(., builtup)) > 0))
   
-#13 Export ----
+#12 Export ----
   st_write(dens_grid, "C:/Users/Vera/Documents/SUBDENSE/Projects/Liverpool_Dembski/R Output/grid_full.gpkg")
   
