@@ -21,10 +21,10 @@ library(officer)
 options(scipen = 999)
 
 #READ DATA----
-setwd("C:/Users/Vera/Documents/SUBDENSE")
-#setwd("G:/ai_daten/P1047_SUBDENSE/liverpool_paper")
-#dens_grid <- st_read("G:/ai_daten/P1047_SUBDENSE/liverpool_paper/Projects/Liverpool_Dembski/R Outputs/grid_full.gpkg") %>% #Pfad Denise
-dens_grid <- st_read("Projects/Liverpool_Dembski/R Output/grid_full.gpkg") %>% 
+#setwd("C:/Users/Vera/Documents/SUBDENSE")
+setwd("G:/ai_daten/P1047_SUBDENSE/liverpool_paper")
+dens_grid <- st_read("G:/ai_daten/P1047_SUBDENSE/liverpool_paper/01_data_input/in_vera/grid_full.gpkg") %>% #Pfad Denise
+# dens_grid <- st_read("Projects/Liverpool_Dembski/R Output/grid_full.gpkg") %>% 
   filter(builtup2011 == 1) %>% #from now on only interested in cells in builtup area
   #all cells that don't overlap with special non-residential land uses have NA but should be 0
   mutate(across(c(nature,agriculture, industry, water,sports,parks,port,airport,dump,rail), ~ replace_na(.x, 0))) %>%
@@ -211,3 +211,87 @@ doc <- read_docx() %>%
   body_add_flextable(ft)
 
 print(doc, target = "Projects/Liverpool_Dembski/R Export/model_results_grouped.docx")
+
+
+
+#Run models for densification types - compared to all cells ----
+dependent_vars <- c("subdivision", "hmo", "office_rental", "large_mfh", "small_mfh", "large_sfh", "small_sfh")
+
+all_results <- map_dfr(dependent_vars, function(dep) {
+  
+  df <- trans_grid %>%
+    # filter(densification == 1) %>%
+    dplyr::select(-c(densification, hmo, subdivision, office_rental,
+                     large_mfh, large_sfh, small_mfh, small_sfh))
+  df <- bind_cols(df, trans_grid %>% 
+                    # filter(densification == 1) %>% 
+                    select(all_of(dep))) #reattach dependent variable
+  
+  names(df)[ncol(df)] <- dep #renames last column to current dependent variable name
+  
+  model <- glm(reformulate(" . - grid_id", dep), data = df, family = "binomial")
+  
+  pred <- predict(model, type = "response")
+  roc_obj <- roc(df[[dep]], pred)
+  auc_val <- as.numeric(auc(roc_obj))
+  r2_val <- pR2(model)["McFadden"]
+  f1_val <- calculate_optimal_f1(pred, df[[dep]])$f1
+  
+  coef_df <- tidy(model) %>%
+    filter(p.value < 0.05) %>%
+    select(term, estimate)
+  
+  metrics <- tibble(
+    term = c("AUC", "McFadden_R2", "F1"),
+    estimate = c(auc_val, r2_val, f1_val)
+  )
+  
+  bind_rows(coef_df, metrics) %>%
+    mutate(model = dep)
+})
+
+# Order terms: coefficients first, indicators last ----
+
+indicator_order <- c("AUC", "McFadden_R2", "F1")
+
+wide_results <- all_results %>%
+  mutate(
+    estimate = round(estimate, 3),
+    is_indicator = term %in% indicator_order
+  ) %>%
+  arrange(is_indicator, term) %>%
+  pivot_wider(names_from = model, values_from = estimate)%>% 
+  select(-is_indicator)
+
+# Build formatted flextable----
+
+ft <- flextable(wide_results) %>%
+  set_header_labels(term = "Variable / Indicator")
+
+# Color coefficients only (exclude indicators)
+coef_rows <- which(!wide_results$is_indicator)
+
+for (col in dependent_vars) {
+  ft <- color(ft, i = coef_rows[wide_results[[col]][coef_rows] > 0],
+              j = col, color = "green")
+  ft <- color(ft, i = coef_rows[wide_results[[col]][coef_rows] < 0],
+              j = col, color = "red")
+}
+
+# Style indicators (bold, gray background)
+ft <- ft %>%
+  bold(i = ~ term %in% indicator_order, bold = TRUE) %>%
+  bg(i = ~ term %in% indicator_order, bg = "#F0F0F0") %>%
+  autofit()
+
+ft
+
+#export final table to word----
+doc <- read_docx() %>%
+  body_add_par("Regression Results (grouped by dependent variable)", style = "heading 1") %>%
+  body_add_flextable(ft)
+
+print(doc, target = "02_data_prep_output/table_allgrid.docx") # Pfad Denise
+#print(doc, target = "Projects/Liverpool_Dembski/R Export/model_results_grouped.docx")
+
+
