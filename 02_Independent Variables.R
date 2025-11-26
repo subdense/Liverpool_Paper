@@ -1,264 +1,314 @@
-#ATTACHING INDEPENDENT VARIABLES TO HECTARE GRID
+#01 SORTING NEW ADDRESSES INTO DENSIFICATION TYPES, AGGREGATE TO HECTARE LEVEL
 
-
-#LIBRARIES----
 library(sf)
 library(dplyr)
-library(osmdata)
+library(dbscan)
 library(tidyr)
-library(nngeo) #to identify nearest point
-#library(classInt) #for jenks breaks
 
-#00 Read data ----
-  setwd("C:/Users/Vera/Documents/SUBDENSE/Data")
-  dens_grid <- read_sf("C:/Users/Vera/Documents/SUBDENSE/Projects/Liverpool_Dembski/R Output/grid_depvar.gpkg")
+#00 Read Data----
+  
+  setwd("C:/Users/Vera/Documents/SUBDENSE/Data")  
+  
+  #boundaries: built-up area 2011 and liverpool case boundary
+  builtup <- read_sf("England/Boundaries/Built_up_Areas_Dec_2011_Boundaries_V2_2022_6094869787211526009.gpkg") %>% select(BUA11CD) #built-up area 2011
   metro <- read_sf("boundaries/liverpool_metropolitan_dissolved.gpkg")
-  builtup <- read_sf("England/Boundaries/Built_up_Areas_Dec_2011_Boundaries_V2_2022_6094869787211526009.gpkg") %>% select(BUA11CD)
-  lsoa <- st_read("England/Boundaries/glcr-lsoa-2011.gpkg") %>% select(LSOA11CD)
   
-  #00.1 OSM data: amenities and parks----
-  #this downloads the latest version, if you want earlier snapshots, go to Geofabrik
+  #addresses: joining addresses with classification file
+  addb_blpu <- st_read("England/AddressBase/0040176195-6425786-1/6425786.gpkg/6425786.gpkg", layer = "blpu")
+  addb_clas <- st_read("England/AddressBase/0040176195-6425786-1/6425786.gpkg/6425786.gpkg", layer = "classification")
+  addresses <- addb_blpu %>% 
+    select(uprn, start_date, end_date) %>% 
+    left_join(addb_clas %>% 
+                transmute(uprn, class_key, classification_code, 
+                          start_date, 
+                          end_date))
+  rm(addb_blpu, addb_clas)
   
-    #first we define the bounding box based on the case area 
-    bbox_sfc <- st_as_sfc(st_bbox(metro, crs = 27700)) #bbox Liverpool region, crs = 27700 #creating the bbox object
-    
-    bbox_wgs84 <- st_transform(bbox_sfc, 4326) #transform bbox to WGS 84 for osm
-    bbox_coords <- st_bbox(bbox_wgs84) #get coordinates
-    
-    # Create initial query for restaurants and bars (points)
-    query1 <- opq(bbox = bbox_coords) %>%
-      add_osm_feature(key = "amenity", value = c("restaurant", "bar"))
-    
-    # Add supermarkets (points)
-    query2 <- opq(bbox = bbox_coords) %>%
-      add_osm_feature(key = "shop", value = "supermarket")
-    
-    # Add parks (polygons)
-    query3 <- opq(bbox = bbox_coords) %>%
-      add_osm_feature(key = "leisure", value = "park")
-    
-    # Download data
-    osm_data1 <- osmdata_sf(query1)
-    osm_data2 <- osmdata_sf(query2)
-    osm_data3 <- osmdata_sf(query3)
-    
-    # Extract relevant layers
-    points_data <- bind_rows(
-      osm_data1$osm_points,
-      osm_data2$osm_points
-    )
-    
-    parks_polygons <- osm_data3$osm_polygons
-    
-    # Transform all to CRS 27700
-    amenities <- st_transform(points_data, 27700)
-    parks <- st_transform(parks_polygons, 27700)
-    
-    rm(query1, query2, query3, osm_data1, osm_data2, osm_data3, points_data, parks_polygons)
+  #building footprints from 2013 that exist in 2023 for subdivisions
+  stable_bld <- st_read("C:/Users/Vera/Documents/SUBDENSE/Projects/Liverpool_Dembski/Input data for analysis/liv_bldg_densetype.gpkg") %>%
+    filter(denstype == 'stable')
   
-  #00.2 Train stations from open map tiles ----
-    stations <- 
-      c("opmplc_essh_sj/OS OpenMap Local (ESRI Shape File) SJ/data/SJ_RailwayStation.shp",
-        "opmplc_essh_sd/OS OpenMap Local (ESRI Shape File) SD/data/SD_RailwayStation.shp") %>%
-      lapply(st_read, quiet = TRUE) %>% # Read each shapefile
-      lapply(select, CLASSIFICA) %>%
-      do.call(rbind, .)
-    stations <- st_zm(stations, drop = TRUE, what = "ZM")
-  #00.3 ORS Driving distance to liverpool central station----
-    regacc_ors <- st_read("trains/distance_matrices/ors_carduration_livmanstation.gpkg") %>% st_transform(regacc_ors, crs = 27700) %>% select(min_to_livmain)
-    
-  #00.4 Dominant age in LSOA in 2011----
-    age <- read.csv("construction_year/ctsop4-1-1993-2021__5_/CTSOP4_1_2011_03_31.csv") %>% 
-      filter(band == "All") %>%
-      rename(LSOA11CD = ecode) %>%
-      #regrouping the construction periods
-      mutate(
-        across(6:31, as.numeric), 
-        across(6:31, replace_na, 0), 
-        p_pre1919 = (bp_pre_1900 + bp_1900_1918) / all_properties
-        ) %>%
-      filter(p_pre1919 <= 1) %>%
-      select(LSOA11CD, p_pre1919)
-    
-  #00.5 Deprivation and income----
-    depri <- read.csv("England/Drivers Liverpool/English_Welsh_Deprivation/File_1_ID_2015_Index_of_Multiple_Deprivation.csv") %>% 
-      select(c(1,5,6)) %>% 
-      rename(LSOA11CD = 1, Rank = 2, deprivation = 3) 
-    
-    depri$Rank <- as.numeric(gsub(",", ".", depri$Rank)) 
-    
-    income <- read.csv("England/Drivers Liverpool/English_Welsh_Deprivation/English Indices of Deprivation_Income_2010.csv") %>% 
-      select(c(1,7)) %>% 
-      rename(LSOA11CD = 1, income_rank = 2) 
-    
-  #00.6 Landuse ----
-    clc <- st_read("landuse/corine/U2018_CLC2012_V2020_20u1.gpkg") #automatically chooses the first layer (the others are French islands)
-    metro_84 <- st_transform(metro, st_crs(clc)) #set case area crs to clc crs
-    clc_liverpool <- st_filter(clc, metro_84, .predicate = st_intersects) #reduce clc to liverpool region
-    clc_liverpool <- st_transform(clc_liverpool, crs = 27700) #set to crs = 27700
-    
-    landuse <- clc_liverpool %>%
-      select(Code_12) %>%
-      mutate(Code_12 = as.numeric(Code_12)) %>%
-      mutate(
-        landuse_class = case_when(
-          Code_12 == 121 ~ "industry",
-          Code_12 == 123 ~ "port",
-          Code_12 == 124 ~ "airport",
-          Code_12 %in% c(131, 132) ~ "dump",
-          Code_12 == 122 ~ "rail",
-          Code_12 > 200 & Code_12 < 300 ~ "agriculture",
-          Code_12 > 300 & Code_12 < 500 ~ "nature",
-          Code_12 == 141 ~ "parks",
-          Code_12 == 142 ~ "sports",
-          Code_12 > 500 | Code_12 == 512 ~ "water"
-        )
-      ) %>%
-      filter(!is.na(landuse_class)) %>%
-      mutate(landuse_class = factor(landuse_class, levels = c(
-        "industry", "port", "airport", "dump", "rail",
-        "agriculture", "nature", "parks", "sports", "water"
-      ))) %>%
-      select(-Code_12) 
-    
-    rm(clc, metro_84, clc_liverpool)
-    
-  #00.7 Socio-economic neighborhood type----
-    oa_c <- read_sf("England/OA Classification/2011_OAC.shp") %>%
-      select(c(SPRGRP, GRP, SUBGRP)) 
-      
-    
-#01 Amenities in 500m neighborhood ----
+  #create or read building footprint polygons for 2023
+  #library(tidyverse)
+  #library(vroom)
+  #footprints_2023 <-
+  #  list.files("England/OS MasterMap/Liverpool 2023", full.names = TRUE, recursive = TRUE) %>% 
+  #  str_subset("gpkg$") %>% # selects all strings ending with gpkg
+  #  map_dfr(read_sf, layer = "Topographicarea") %>% 
+  #  filter(theme == "Buildings") %>%
+  #  mutate(fid_os = fid) %>% select(-fid) %>%
+  #  st_as_sf() %>%
+  #  distinct(fid_os, .keep_all = TRUE) #at the tile intersections, buildings are double
+  footprints_2023 <- st_read("England/OS MasterMap/Liverpool 2023/footprints_2023.gpkg")
   
-  #create 500m buffers around grid cells  
-  dens_grid_buffer <- st_centroid(dens_grid) %>% select(grid_id) %>% st_buffer(dist = 500)
-  
-  #intersect buffers with amenities    
-  intersections <- st_join(dens_grid_buffer, amenities) %>% filter(!is.na(osm_id))
-  
-  #count amenities
-  count <- intersections %>% st_drop_geometry() %>% group_by(grid_id) %>% summarize(amenity_count = n(), .groups = "drop")
-  
-  #join amenity information with original grid
-  dens_grid <- left_join(dens_grid, count, by = "grid_id")
-  dens_grid$amenity_count[is.na(dens_grid$amenity_count)] <- 0  
-  rm(dens_grid_buffer, intersections, count, amenities, bbox_coords, bbox_sfc, bbox_wgs84, metro)
-  
-#02 Euclidean distance to nearest park edge ----
-  
-  grid_centroids <- dens_grid %>% st_centroid() %>% select(grid_id)
-  nearest_park_index <- st_nearest_feature(grid_centroids, parks) #identify nearest park
-  nearest_parks <- parks[nearest_park_index, ]
-  dist_to_park_edge <- st_distance(grid_centroids, nearest_parks, by_element = TRUE) #calculate distance
-  dens_grid$m_to_park <- as.numeric(dist_to_park_edge)
-  
-  rm(nearest_park_index, nearest_parks, dist_to_park_edge)
-
-#03 Distance to nearest train station ----
-  
-  nearest_idx <- st_nn(grid_centroids, stations, k = 1, returnDist = TRUE) #identify nearest station to each grid centroid
-  nearest_distances <- sapply(nearest_idx$dist, function(d) d) # nearest_idx is a list of indices and distances
-  dens_grid$m_to_train <- nearest_distances # Add results to the grid
-  rm(nearest_idx, nearest_distances)
-  
-#04 Driving distance to Liverpool Central Station ----
-  dens_grid <- st_join(dens_grid, regacc_ors, join = st_nearest_feature)
-
-
-#05 Landuse ----
-  #Intersect landuse with grid and calculate share of each type----
-  intersection <- st_intersection(dens_grid, landuse)
-  intersection$area <- st_area(intersection)
-  landuse_summary <- intersection %>%
+  #import LUCS data where J = Offices and K = Retail
+  lucs <- st_read("England/LUCS/lucs_liv.gpkg") %>% 
     st_drop_geometry() %>%
-    group_by(grid_id, landuse_class) %>%  
-    summarise(share = as.numeric(sum(area))/10000, .groups = "drop")
+    select(c(fid_os, V_FROM_CODE, LUCS_FROM_CODE, COMPLETIONS, CONVERSIONS_TORESIDENTIAL)) %>%
+    filter(LUCS_FROM_CODE == "J" | LUCS_FROM_CODE == "K") %>% #filter to conversions
+    mutate(office_retail = 1) %>%
+    select(-V_FROM_CODE, -LUCS_FROM_CODE)
   
-  #Transform ----
-  landuse_wide <- landuse_summary %>%
-    pivot_wider(
-      names_from = landuse_class,
-      values_from = share,
-      values_fill = 0
+  #00 Read Data Denise----
+  setwd("G:/ai_daten/P1047_SUBDENSE/liverpool_paper")
+  
+  #boundaries: built-up area 2011 and liverpool case boundary
+  builtup <- read_sf("01_data_input/Built_up_Areas_Dec_2011_Boundaries_V2_2022_6094869787211526009.gpkg") %>% select(BUA11CD) #built-up area 2011
+  metro <- read_sf("01_data_input/liverpool_metropolitan_dissolved.gpkg")
+  
+  #addresses: joining addresses with classification file
+  addb_blpu <- st_read("G:/ai_daten/P1047_SUBDENSE/01_raw_data/UK/OS/AddressBase/AddressBase/0040176195-6425786-1/6425786.gpkg/6425786.gpkg", layer = "blpu")
+  addb_clas <- st_read("G:/ai_daten/P1047_SUBDENSE/01_raw_data/UK/OS/AddressBase/AddressBase/0040176195-6425786-1/6425786.gpkg/6425786.gpkg", layer = "classification")
+  addresses <- addb_blpu %>% 
+    select(uprn, start_date, end_date) %>% 
+    left_join(addb_clas %>% 
+                transmute(uprn, class_key, classification_code, 
+                          start_date, 
+                          end_date))
+  rm(addb_blpu, addb_clas)
+  
+  #building footprints from 2013 that exist in 2023 for subdivisions
+  stable_bld <- st_read("G:/ai_daten/P1047_SUBDENSE/liverpool_paper/02_data_prep_output/liv_bldg_densetype.gpkg") %>%
+    filter(denstype == 'stable')
+  
+  footprints_2023 <- st_read("G:/ai_daten/P1047_SUBDENSE/liverpool_paper/Projects/Liverpool_Dembski/OneDrive_2025-10-02/Input data for analysis/OS MasterMap/Liverpool City Region/2023/footprints_2023.gpkg")
+  
+  footprints_2023v2 <- st_read("G:/ai_daten/P1047_SUBDENSE/liverpool_paper/02_data_prep_output/liv_bldg_2023.gpkg")
+  
+  
+#01 Filter to addresses in case area ----
+  
+  addresses <- addresses[st_within(addresses, metro, sparse = FALSE), ]
+
+#02 Divide into new and existing addresses, distinguish hmo from sfh and mfh (05.2013 - 05.2023) ----
+  addresses <- addresses %>%
+    mutate(#new flats
+           flat_new = ifelse(start_date  >= '2013-05-01' & start_date < '2023-05-01' & (end_date >= '2023-05-01' | is.na(end_date))
+                             & classification_code == 'RD06', 1, 0), #new flats
+           #new single family
+           sfh_new = ifelse(start_date  >= '2013-05-01' & start_date < '2023-05-01' & (end_date >= '2023-05-01' | is.na(end_date))
+                            & (classification_code == 'RD02' | classification_code == 'RD03' | classification_code == 'RD04'), 1, 0), 
+           #new hmo 
+           hmo_new = ifelse(start_date >= '2013-05-01' & start_date < '2023-05-01' & (end_date >= '2023-05-01' | is.na(end_date))
+                            & (classification_code == 'RH02'),1 ,0), 
+           #all new housing units since 2013 - including hmo's
+           hunits_new = ifelse(flat_new == 1 | sfh_new == 1 | hmo_new == 1, 1, 0), 
+           
+           #housing units that existed in 2013 (this doesnt count RH02, HMO's for some reason but ok. and new housing has no RH01 and RH03)
+           hunits_2013 = ifelse(start_date < '2013-05-01' & (end_date >= '2013-05-01' | is.na(end_date))
+                                & (classification_code == 'RD02' | classification_code == 'RD03' | classification_code == 'RD04' | classification_code == 'RD06' | 
+                                     classification_code == 'RH01' | classification_code == 'RH03' | classification_code == 'X'), 1, 0),
+           #housing units that exist in 2023
+           hunits_2023 = ifelse(start_date < '2023-05-01' & (end_date >= '2023-05-01' | is.na(end_date))
+                                & (classification_code == 'RD02' | classification_code == 'RD03' | classification_code == 'RD04' | classification_code == 'RD06' | 
+                                     classification_code == 'RH01' | classification_code == 'RH03' | classification_code == 'X'), 1, 0), 
+           #sfh that existed in 2013
+           sfh_2013 = ifelse(start_date < '2013-05-01' & (end_date >= '2013-05-01' | is.na(end_date))
+                             & (classification_code == 'RD02' | classification_code == 'RD03' | classification_code == 'RD04'), 1, 0),
+           #all addresses that existed in 2013 (including non-residential)
+           all_2013 = ifelse(start_date < '2013-05-01' & (end_date >= '2013-05-01' | is.na(end_date)), 1, 0),
+           
+           #factor variables output and process. they get updated throughout and will only include addresses in builtup area. unlike the 1/0 variables, they are not mutually exclusive 
+           output = case_when(
+             sfh_new == 1 ~ "sfh",
+             flat_new == 1 ~ "flat", 
+             hmo_new == 1 ~ "hmo",
+             TRUE ~ "non-residential"),
+           process = "infill" #default. i take out expansion later and will mark subdivision and office rental in the next steps
+           )
+
+#03 Subdivisions ----
+  #mark dens flats that overlap with 2013 buildings that exist still in 2023 as subdivision == 1
+  addresses <- addresses %>%
+    mutate(subdivision = ifelse(flat_new == 1 & lengths(st_intersects(., stable_bld)) > 0, 1, 0),
+           process = ifelse(subdivision == 1, "subdivision", process), #update process variable
+           flat_new = ifelse(subdivision == 1, 0, flat_new)) #a unit is either a flat or a subdivision, not both, but output will still show mfh
+
+#04 Office to rental conversions ----
+  #join addresses with building footprint id
+  addresses <- st_join(addresses, footprints_2023[, "fid_os"], join = st_intersects, left = TRUE)
+  addresses <- distinct(addresses, uprn, .keep_all = TRUE) #some addresses are at the intersection of 2 buildings
+  
+  #join addresses with conversion info through building footprint
+  addresses <- left_join(addresses, lucs %>% select(c(fid_os, office_retail)), by = "fid_os", relationship = "many-to-many")
+  addresses <- distinct(addresses, uprn, .keep_all = TRUE) #some addresses are at the intersection of 2 buildings
+  
+  #office rental conversions must also be a new housing unit between 2013 and 2023
+  addresses <- addresses %>% mutate(office_retail = ifelse(hunits_new == 0, 0, office_retail))
+
+  #a new unit that is office retail does not belong to any other group (hmo, sfh, flat, subdivision)
+  #however, the addresses are still marked as hmo, flat or sfh in output variable
+  addresses <- addresses %>%
+    mutate(
+      office_retail = replace_na(office_retail, 0),
+      process = ifelse(office_retail == 1, "office_retail", process), #update process, overwrites subdivisions
+      flat_new = ifelse(office_retail == 1, 0, flat_new),
+      hmo_new = ifelse(office_retail == 1, 0, hmo_new),   #hmos that are office retail are office retail
+      sfh_new = ifelse(office_retail == 1, 0, sfh_new),   #sfh that are office retail are office retail
+      subdivision = ifelse(office_retail == 1, 0, subdivision),   #subdivisions that are office retail are office retail
+
     )
   
-  dens_grid <- left_join(dens_grid, landuse_wide, by = "grid_id")
-  rm(intersection, landuse_summary, landuse_wide)
+  rm(lucs, footprints_2023)
   
-#06 Neighborhood density ----
-  #partition into natural breaks LD-MD-HD and NB based on address count 2011----
-  filtered_data <- dens_grid %>% filter(addresses_2013 > 0) 
-  #breaks <- classInt::classIntervals(filtered_data$addresses_2013, n = 3, style = "jenks")[["brks"]][-1]
-  #takes too long, 3 groups in qgis returned high category with only 10 observations, so I do 4 groups and take the highest two together
-  breaks <- c(19,57)
+#05 Group new flats and sfh in projects ----
+  #we only group new sfh and flats that are not subdivisions or office rental conversions
+  addresses_new <- addresses %>% filter(sfh_new == 1 | flat_new == 1) %>% select(uprn)
   
-  dens_grid <- dens_grid %>%
-    mutate(dens_group11 = case_when(
-      addresses_2013 == 0 | is.na(addresses_2013) ~ "NB",
-      addresses_2013 <= breaks[1] ~ "LD",
-      addresses_2013 <= breaks[2] ~ "MD",
-      TRUE ~ "HD"
-    ))
+  #we use dbscan to cluster: min size 5, max distance 50m
+  coords <- st_coordinates(addresses_new)
+  db <- dbscan(coords, eps = 50, minPts = 5) #cluster points
   
-  #240m buffer around each cell to search neighborhood 5x5 cell like mustafa 2018----
-  buffer_df <- st_buffer(grid_centroids, dist = 240) 
-  dens_groups <- dens_grid %>% select(c(dens_group11, grid_id)) %>% rename(nb_id = grid_id)
-  nb_counts <- st_join(buffer_df, dens_groups, join = st_intersects)    
-  nb_counts <- nb_counts %>% filter(grid_id != nb_id) %>% select(-nb_id) #take out the one in the middle
+  #we attach cluster id and cluster size to the original df
+  addresses_new <- addresses_new %>% mutate(cluster_id = db$cluster) #attach cluster id back to original df
+  cluster_sizes <- addresses_new %>% group_by(cluster_id) %>% summarise(group_size = n(), .groups = "drop") %>% st_drop_geometry()
+  addresses_new <- addresses_new %>% left_join(cluster_sizes, by = "cluster_id") #attach cluster size
+  addresses <- addresses %>% left_join(addresses_new %>% st_drop_geometry(), by = "uprn") #join using individual address id
+  rm(coords, db, cluster_sizes) #clean up
   
-  #count cells of each class in neighborhood----
-  nb_counts <- nb_counts %>%
+  #individual new flats and sfh have cluster group 0, existing addresses and new other units have cluster group and size = NA
+  #for both cases we set cluster group and cluster size to 0
+  addresses <- addresses %>%
+    mutate(
+      cluster_id = replace_na(cluster_id, 0),
+      group_size = ifelse(cluster_id == 0, 0, group_size),
+      group_size = replace_na(group_size, 0)
+    )
+  
+#06 Take out projects that are (partially) outside built-up area ----
+  
+  #intersect built up area and new addresses
+  intersects <- st_join(addresses_new, builtup)
+  intersects <- intersects %>% mutate(builtup_flag = ifelse(!is.na(BUA11CD), 1, 0)) #we mark points in builtup area
+  intersects_clusters <- intersects %>% filter(cluster_id > 0) #we look only at addresses in clusters for now
+  
+  #summarize share of cluster in builtup area and mark as densification cluster if >80% of points are in builtup area
+  cluster_builtup_stats <- intersects_clusters %>%
     st_drop_geometry() %>%
+    group_by(cluster_id) %>%
+    summarise(
+      n_total = n(),
+      n_builtup = sum(builtup_flag, na.rm = TRUE),
+      builtup_ratio = n_builtup / n_total,
+      builtup_2011 = as.integer(builtup_ratio >= 0.8),
+      .groups = "drop"
+    )
+  
+  #join information on densification clusters with original dataset
+  addresses <- addresses %>% 
+    left_join(cluster_builtup_stats %>% select(cluster_id, builtup_2011), by = "cluster_id")
+  
+  #all addresses outside the clusters also get a flag if they are in builtup area
+  addresses <- addresses %>%
+    mutate(
+      builtup_2011 = if_else(
+        group_size == 0 & lengths(st_intersects(., builtup)) > 0,
+        1L,  # set to 1 if condition is met
+        builtup_2011  # otherwise keep existing value
+      )
+    )
+  
+  rm(intersects_clusters, addresses_new)
+  
+#07 Mark new flats, sfh, hmos etc if they are densification ----
+  #we also update the process and outcome variables and set them to NA if they are outside the builtup area 
+  addresses <- addresses %>%
+    mutate(process = ifelse(is.na(builtup_2011), NA, process),
+           output = ifelse(is.na(builtup_2011), NA, output),
+           flat_dens = ifelse(flat_new == 1 & builtup_2011 == 1, 1, 0), 
+           sfh_dens = ifelse(sfh_new == 1 & builtup_2011 == 1, 1, 0), 
+           hunits_dens = ifelse(hunits_new == 1 & builtup_2011 == 1, 1, 0), 
+           hmo_dens = ifelse(hmo_new == 1 & builtup_2011 == 1, 1, 0), 
+           hunits_2013_bua = ifelse(hunits_2013 == 1 & builtup_2011 == 1, 1, 0)) #yes, not all housing units of 2013 are in the builtup area of 2011
+  
+#08 Flag large projects inside BUA ----
+  addresses <- addresses %>%
+    mutate(
+      large_project = ifelse(group_size > 9 & cluster_id != 0 & builtup_2011 == 1, 1, 0))
+  
+  
+#09 Is the project dominated by mfh or sfh ----
+  projects <- addresses %>% st_drop_geometry() %>%
+    filter(group_size > 0 & builtup_2011 == 1) %>% #projects in builtup area
+    group_by(cluster_id) %>%
+    summarize(flats = sum(flat_dens == 1),
+              sfh = sum(sfh_dens == 1)) %>%
+    mutate(flat_dominant = ifelse(flats > sfh, 1, 0),
+           sfh_dominant = ifelse(sfh > flats, 1, 0)) %>%
+    select(-flats, -sfh)
+  
+  addresses <- left_join(addresses, projects, by = "cluster_id")
+  
+  rm(projects)
+  
+  #Export addresses----
+  addresses[is.na(addresses)] <- 0
+  st_write(addresses, "C:/Users/Vera/Documents/SUBDENSE/Projects/Liverpool_Dembski/R Output/classified_addresses.gpkg")
+  
+#10 make grid and join with grid----
+  #Create 100m grid using case area polygon
+  grid <- st_make_grid(metro, cellsize = 100) #creating the grid with bounding box of case area
+  grid <- st_sf(geometry = grid) #convert to sf object
+  grid <- grid[st_within(grid, metro, sparse = FALSE), ] #keep only cells that intersect with case area
+  grid <- grid %>% mutate(grid_id = row_number())
+  
+  rm(metro)
+  
+  #Join address data with grid
+  intersections <- st_join(grid, addresses) %>% st_drop_geometry()
+  count <- intersections %>% 
+    rename(sd_unit = subdivision) %>%
     group_by(grid_id) %>%
     summarize(
-      nb11_LDcount = sum(dens_group11 == "LD"),
-      nb11_MDcount = sum(dens_group11 == "MD"),
-      nb11_HDcount = sum(dens_group11 == "HD"), 
-      nb11_NBcount = 24 - nb11_LDcount - nb11_MDcount - nb11_HDcount #takes into account that the grid only contains built up area 
-    ) 
+      #dichotomous variables
+      hmo = as.integer(any(hmo_dens == 1)), #returns 1 if there are any hmo_dens observations in the grid cell
+      office_rental = as.integer(any(office_retail == 1)), #same for office/retail to rental conversions
+      large_mfh = as.integer(any(flat_dominant == 1 & large_project == 1)), 
+      large_sfh = as.integer(any(sfh_dominant == 1 & large_project == 1)), 
+      small_mfh = as.integer(any(
+        (flat_dominant == 1 & large_project == 0) | #small projects that are flat dominant
+        (flat_dens == 1 & group_size == 0))), #or just individual flats
+      small_sfh = as.integer(any(
+        (sfh_dominant == 1 & large_project == 0) |
+        (sfh_dens == 1 & group_size == 0))), 
+      subdivision = as.integer(any(sd_unit == 1)),
+      
+      #unit counts
+      hmo_ct = sum(hmo_dens == 1, na.rm = TRUE), 
+      office_rental_ct = sum(office_retail == 1, na.rm = TRUE), #same for office/retail to rental conversions
+      large_mfh_ct = sum(flat_dominant == 1 & large_project == 1, na.rm = TRUE), 
+      large_sfh_ct = sum(sfh_dominant == 1 & large_project == 1, na.rm = TRUE), 
+      small_mfh_ct = sum(
+        (flat_dominant == 1 & large_project == 0) |
+        (flat_dens == 1 & group_size == 0),
+        na.rm = TRUE), 
+      small_sfh_ct = sum(
+        (sfh_dominant == 1 & large_project == 0) |
+        (sfh_dens == 1 & group_size == 0),
+        na.rm = TRUE), 
+      subdivision_ct = sum(sd_unit == 1, na.rm = TRUE),
+      
+      addresses_2013 = sum(all_2013)
+    )
   
-  dens_grid <- left_join(dens_grid, nb_counts, by = "grid_id")
-  rm(buffer_df, dens_groups, filtered_data, nb_counts)
+  dens_grid <- count
+  dens_grid <- left_join(dens_grid, grid, by = "grid_id") #re-attach geometry
+  dens_grid <- st_as_sf(dens_grid, sf_column_name = "geometry")
   
-#07 Share SFH in 3x3 cell neighborhood 2013 ----
-  hunits <- read_sf("C:/Users/Vera/Documents/SUBDENSE/Projects/Liverpool_Dembski/R Output/classified_addresses.gpkg") %>%
-    filter(hunits_2013 > 0) %>%
-    select(c(sfh_2013, hunits_2013))
+  #for comparison, add the office retail conversion count from the lucs data? 
+  lucs <- st_read("England/LUCS/lucs_liv.gpkg") %>% 
+    select(c(V_FROM_CODE, LUCS_FROM_CODE, COMPLETIONS, CONVERSIONS_TORESIDENTIAL)) %>%
+    filter(LUCS_FROM_CODE == "J" | LUCS_FROM_CODE == "K") %>% #filter to conversions
+    mutate(count = COMPLETIONS + CONVERSIONS_TORESIDENTIAL) %>%
+    select(count)
   
-  buffer_df <- st_buffer(dens_grid, dist = 145) %>% select(grid_id) %>% rename(buffer_id = grid_id)
-  sfh_intersect <- st_join(buffer_df, hunits, join = st_intersects) %>% st_drop_geometry()
-  sfh_counts <- sfh_intersect %>%
-    group_by(buffer_id) %>%
-    summarize(sfh_count = sum(sfh_2013, na.rm = TRUE),
-              hunit_count = sum(hunits_2013, na.rm = TRUE),
-              sfh_share = sfh_count/hunit_count) %>%
-    mutate(sfh_share = if_else(is.nan(sfh_share), NA_real_, sfh_share)) %>%
-    select(c(buffer_id, sfh_share)) %>%
-    rename(grid_id = buffer_id)
-  dens_grid <- left_join(dens_grid, sfh_counts, by = "grid_id")
-  rm(hunits_2013, buffer_df, sfh_counts, sfh_intersect)
+  dens_grid_joined <- aggregate(lucs["count"], dens_grid, sum)
   
-#08 Building age ----
-  #ADD LSOA CODE TO DENS GRID
-  grid_lsoa <- st_join(grid_centroids, lsoa) %>% st_drop_geometry()
-  dens_grid <- left_join(dens_grid, grid_lsoa, by = "grid_id")
+  dens_grid_joined <- dens_grid %>%
+    mutate(lucs_count = dens_grid_joined$count)
   
-  #JOIN BUILDING AGE USING LSOA CODES
-  dens_grid <- left_join(dens_grid, age, by = "LSOA11CD")
+  dens_grid <- dens_grid_joined
   
-#09 Deprivation and Income level ----
-  dens_grid <- left_join(dens_grid, depri, by = "LSOA11CD")
-  dens_grid <- left_join(dens_grid, income, by = "LSOA11CD")  
-  
-#10 OA Classification ----
-  centroids_joined <- st_join(dens_grid %>% st_centroid() %>% select(grid_id), oa_c, join = st_within)
-  dens_grid <- dens_grid %>%
-    left_join(st_drop_geometry(centroids_joined),
-              by = "grid_id")
-  
-#11 Mark grid cells in built-up area ----
-  dens_grid <- dens_grid %>% mutate(builtup2011 = as.integer(lengths(st_intersects(., builtup)) > 0))
-  
-#12 Export ----
-  st_write(dens_grid, "C:/Users/Vera/Documents/SUBDENSE/Projects/Liverpool_Dembski/R Output/grid_full.gpkg")
+  #export
+  st_write(dens_grid, "C:/Users/Vera/Documents/SUBDENSE/Projects/Liverpool_Dembski/R Output/grid_depvar.gpkg")
   
