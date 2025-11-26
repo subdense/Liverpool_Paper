@@ -5,10 +5,9 @@ library(dplyr)
 library(dbscan)
 library(tidyr)
 
-
-#00 Read Data Vera----
+#00 Read Data----
   
-    setwd("C:/Users/Vera/Documents/SUBDENSE/Data")  
+  setwd("C:/Users/Vera/Documents/SUBDENSE/Data")  
   
   #boundaries: built-up area 2011 and liverpool case boundary
   builtup <- read_sf("England/Boundaries/Built_up_Areas_Dec_2011_Boundaries_V2_2022_6094869787211526009.gpkg") %>% select(BUA11CD) #built-up area 2011
@@ -50,7 +49,7 @@ library(tidyr)
     mutate(office_retail = 1) %>%
     select(-V_FROM_CODE, -LUCS_FROM_CODE)
   
-#00 Read Data Denise----
+  #00 Read Data Denise----
   setwd("G:/ai_daten/P1047_SUBDENSE/liverpool_paper")
   
   #boundaries: built-up area 2011 and liverpool case boundary
@@ -107,14 +106,23 @@ library(tidyr)
            sfh_2013 = ifelse(start_date < '2013-05-01' & (end_date >= '2013-05-01' | is.na(end_date))
                              & (classification_code == 'RD02' | classification_code == 'RD03' | classification_code == 'RD04'), 1, 0),
            #all addresses that existed in 2013 (including non-residential)
-           all_2013 = ifelse(start_date < '2013-05-01' & (end_date >= '2013-05-01' | is.na(end_date)), 1, 0)
+           all_2013 = ifelse(start_date < '2013-05-01' & (end_date >= '2013-05-01' | is.na(end_date)), 1, 0),
+           
+           #factor variables output and process. they get updated throughout and will only include addresses in builtup area. unlike the 1/0 variables, they are not mutually exclusive 
+           output = case_when(
+             sfh_new == 1 ~ "sfh",
+             flat_new == 1 ~ "flat", 
+             hmo_new == 1 ~ "hmo",
+             TRUE ~ "non-residential"),
+           process = "infill" #default. i take out expansion later and will mark subdivision and office rental in the next steps
            )
 
 #03 Subdivisions ----
   #mark dens flats that overlap with 2013 buildings that exist still in 2023 as subdivision == 1
   addresses <- addresses %>%
     mutate(subdivision = ifelse(flat_new == 1 & lengths(st_intersects(., stable_bld)) > 0, 1, 0),
-           flat_new = ifelse(subdivision == 1, 0, flat_new)) #a unit is either a flat or a subdivision, not both
+           process = ifelse(subdivision == 1, "subdivision", process), #update process variable
+           flat_new = ifelse(subdivision == 1, 0, flat_new)) #a unit is either a flat or a subdivision, not both, but output will still show mfh
 
 #04 Office to rental conversions ----
   #join addresses with building footprint id
@@ -122,16 +130,18 @@ library(tidyr)
   addresses <- distinct(addresses, uprn, .keep_all = TRUE) #some addresses are at the intersection of 2 buildings
   
   #join addresses with conversion info through building footprint
-  addresses <- left_join(addresses, lucs, by = "fid_os", relationship = "many-to-many")
+  addresses <- left_join(addresses, lucs %>% select(c(fid_os, office_retail)), by = "fid_os", relationship = "many-to-many")
   addresses <- distinct(addresses, uprn, .keep_all = TRUE) #some addresses are at the intersection of 2 buildings
   
   #office rental conversions must also be a new housing unit between 2013 and 2023
   addresses <- addresses %>% mutate(office_retail = ifelse(hunits_new == 0, 0, office_retail))
 
   #a new unit that is office retail does not belong to any other group (hmo, sfh, flat, subdivision)
+  #however, the addresses are still marked as hmo, flat or sfh in output variable
   addresses <- addresses %>%
     mutate(
       office_retail = replace_na(office_retail, 0),
+      process = ifelse(office_retail == 1, "office_retail", process), #update process, overwrites subdivisions
       flat_new = ifelse(office_retail == 1, 0, flat_new),
       hmo_new = ifelse(office_retail == 1, 0, hmo_new),   #hmos that are office retail are office retail
       sfh_new = ifelse(office_retail == 1, 0, sfh_new),   #sfh that are office retail are office retail
@@ -142,7 +152,7 @@ library(tidyr)
   rm(lucs, footprints_2023)
   
 #05 Group new flats and sfh in projects ----
-  #we only group new sfh and flats
+  #we only group new sfh and flats that are not subdivisions or office rental conversions
   addresses_new <- addresses %>% filter(sfh_new == 1 | flat_new == 1) %>% select(uprn)
   
   #we use dbscan to cluster: min size 5, max distance 50m
@@ -156,7 +166,8 @@ library(tidyr)
   addresses <- addresses %>% left_join(addresses_new %>% st_drop_geometry(), by = "uprn") #join using individual address id
   rm(coords, db, cluster_sizes) #clean up
   
-  #individual new flats and sfh have cluster group 0 and size 1778, existing addresses and new other units have cluster group and size = NA
+  #individual new flats and sfh have cluster group 0, existing addresses and new other units have cluster group and size = NA
+  #for both cases we set cluster group and cluster size to 0
   addresses <- addresses %>%
     mutate(
       cluster_id = replace_na(cluster_id, 0),
@@ -200,8 +211,11 @@ library(tidyr)
   rm(intersects_clusters, addresses_new)
   
 #07 Mark new flats, sfh, hmos etc if they are densification ----
+  #we also update the process and outcome variables and set them to NA if they are outside the builtup area 
   addresses <- addresses %>%
-    mutate(flat_dens = ifelse(flat_new == 1 & builtup_2011 == 1, 1, 0), 
+    mutate(process = ifelse(is.na(builtup_2011), NA, process),
+           output = ifelse(is.na(builtup_2011), NA, output),
+           flat_dens = ifelse(flat_new == 1 & builtup_2011 == 1, 1, 0), 
            sfh_dens = ifelse(sfh_new == 1 & builtup_2011 == 1, 1, 0), 
            hunits_dens = ifelse(hunits_new == 1 & builtup_2011 == 1, 1, 0), 
            hmo_dens = ifelse(hmo_new == 1 & builtup_2011 == 1, 1, 0), 
@@ -280,7 +294,7 @@ library(tidyr)
   dens_grid <- count
   dens_grid <- left_join(dens_grid, grid, by = "grid_id") #re-attach geometry
   dens_grid <- st_as_sf(dens_grid, sf_column_name = "geometry")
-
+  
   #for comparison, add the office retail conversion count from the lucs data? 
   lucs <- st_read("England/LUCS/lucs_liv.gpkg") %>% 
     select(c(V_FROM_CODE, LUCS_FROM_CODE, COMPLETIONS, CONVERSIONS_TORESIDENTIAL)) %>%
@@ -295,5 +309,6 @@ library(tidyr)
   
   dens_grid <- dens_grid_joined
   
+  #export
   st_write(dens_grid, "C:/Users/Vera/Documents/SUBDENSE/Projects/Liverpool_Dembski/R Output/grid_depvar.gpkg")
   
