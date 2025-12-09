@@ -24,7 +24,7 @@ library(tidyr)
                           end_date))
   rm(addb_blpu, addb_clas)
   
-  #building footprints from 2013 that exist in 2023 for subdivisions
+  #building footprints from 2013 that exist in 2022 for subdivisions
   stable_bld <- st_read("C:/Users/Vera/Documents/SUBDENSE/Projects/Liverpool_Dembski/Input data for analysis/liv_bldg_densetype.gpkg") %>%
     filter(denstype == 'stable')
   
@@ -80,16 +80,16 @@ library(tidyr)
   
   addresses <- addresses[st_within(addresses, metro, sparse = FALSE), ]
 
-#02 Divide into new and existing addresses, distinguish hmo from sfh and mfh (05.2013 - 05.2023) ----
+#02 Divide into new and existing addresses, distinguish hmo from sfh and mfh (05.2013 - 05.2022) ----
   addresses <- addresses %>%
     mutate(#new flats
-           flat_new = ifelse(start_date  >= '2013-05-01' & start_date < '2023-05-01' & (end_date >= '2023-05-01' | is.na(end_date))
+           flat_new = ifelse(start_date  >= '2013-05-01' & start_date < '2022-05-01' & (end_date >= '2022-05-01' | is.na(end_date))
                              & classification_code == 'RD06', 1, 0), #new flats
            #new single family
-           sfh_new = ifelse(start_date  >= '2013-05-01' & start_date < '2023-05-01' & (end_date >= '2023-05-01' | is.na(end_date))
+           sfh_new = ifelse(start_date  >= '2013-05-01' & start_date < '2022-05-01' & (end_date >= '2022-05-01' | is.na(end_date))
                             & (classification_code == 'RD02' | classification_code == 'RD03' | classification_code == 'RD04'), 1, 0), 
            #new hmo 
-           hmo_new = ifelse(start_date >= '2013-05-01' & start_date < '2023-05-01' & (end_date >= '2023-05-01' | is.na(end_date))
+           hmo_new = ifelse(start_date >= '2013-05-01' & start_date < '2022-05-01' & (end_date >= '2022-05-01' | is.na(end_date))
                             & (classification_code == 'RH02'),1 ,0), 
            #all new housing units since 2013 - including hmo's
            hunits_new = ifelse(flat_new == 1 | sfh_new == 1 | hmo_new == 1, 1, 0), 
@@ -98,8 +98,8 @@ library(tidyr)
            hunits_2013 = ifelse(start_date < '2013-05-01' & (end_date >= '2013-05-01' | is.na(end_date))
                                 & (classification_code == 'RD02' | classification_code == 'RD03' | classification_code == 'RD04' | classification_code == 'RD06' | 
                                      classification_code == 'RH01' | classification_code == 'RH03' | classification_code == 'X'), 1, 0),
-           #housing units that exist in 2023
-           hunits_2023 = ifelse(start_date < '2023-05-01' & (end_date >= '2023-05-01' | is.na(end_date))
+           #housing units that exist in 2022
+           hunits_2022 = ifelse(start_date < '2022-05-01' & (end_date >= '2022-05-01' | is.na(end_date))
                                 & (classification_code == 'RD02' | classification_code == 'RD03' | classification_code == 'RD04' | classification_code == 'RD06' | 
                                      classification_code == 'RH01' | classification_code == 'RH03' | classification_code == 'X'), 1, 0), 
            #sfh that existed in 2013
@@ -133,17 +133,17 @@ library(tidyr)
   addresses <- left_join(addresses, lucs %>% select(c(fid_os, office_retail)), by = "fid_os", relationship = "many-to-many")
   addresses <- distinct(addresses, uprn, .keep_all = TRUE) #some addresses are at the intersection of 2 buildings
   
-  #office rental conversions must also be a new housing unit between 2013 and 2023
+  #office rental conversions must also be a new housing unit between 2013 and 2022
   addresses <- addresses %>% mutate(office_retail = ifelse(hunits_new == 0, 0, office_retail))
 
-  #a new unit that is office retail does not belong to any other group (hmo, sfh, flat, subdivision)
+  #a new unit that is office retail does not belong to sfh, flat, subdivision. but if it was a conversion to hmo, hmo trumps. 
   #however, the addresses are still marked as hmo, flat or sfh in output variable
   addresses <- addresses %>%
     mutate(
       office_retail = replace_na(office_retail, 0),
       process = ifelse(office_retail == 1, "office_retail", process), #update process, overwrites subdivisions
       flat_new = ifelse(office_retail == 1, 0, flat_new),
-      hmo_new = ifelse(office_retail == 1, 0, hmo_new),   #hmos that are office retail are office retail
+      office_retail = ifelse(hmo_new == 1, 0, office_retail),   #hmos that are also office retail are still hmos!
       sfh_new = ifelse(office_retail == 1, 0, sfh_new),   #sfh that are office retail are office retail
       subdivision = ifelse(office_retail == 1, 0, subdivision),   #subdivisions that are office retail are office retail
 
@@ -211,7 +211,8 @@ library(tidyr)
   rm(intersects_clusters, addresses_new)
   
 #07 Mark new flats, sfh, hmos etc if they are densification ----
-  #we also update the process and outcome variables and set them to NA if they are outside the builtup area 
+  #we also update the process and outcome variables and set them to NA if they are outside the builtup area
+  #subdi and o-r not addressed separately, i assume if they were created in an existing house, they are densification
   addresses <- addresses %>%
     mutate(process = ifelse(is.na(builtup_2011), NA, process),
            output = ifelse(is.na(builtup_2011), NA, output),
