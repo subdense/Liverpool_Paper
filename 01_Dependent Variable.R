@@ -113,17 +113,21 @@ library(tidyr)
              sfh_new == 1 ~ "sfh",
              flat_new == 1 ~ "flat", 
              hmo_new == 1 ~ "hmo",
+             all_2013 == 1 ~ "existing",
              TRUE ~ "non-residential"),
            process = "infill" #default. i take out expansion later and will mark subdivision and office rental in the next steps
            )
 
 #03 Subdivisions ----
-  #mark dens flats that overlap with 2013 buildings that exist still in 2023 as subdivision == 1
+  #mark hunits that overlap with 2013 buildings that exist still in 2023 as subdivision == 1
+  #subdivision trumps flat and sfh, but hmo trumps subdivision
   addresses <- addresses %>%
-    mutate(subdivision = ifelse(flat_new == 1 & lengths(st_intersects(., stable_bld)) > 0, 1, 0),
+    mutate(subdivision = ifelse(hunits_new == 1 & lengths(st_intersects(., stable_bld)) > 0, 1, 0),
            process = ifelse(subdivision == 1, "subdivision", process), #update process variable
-           flat_new = ifelse(subdivision == 1, 0, flat_new)) #a unit is either a flat or a subdivision, not both, but output will still show mfh
-
+           flat_new = ifelse(subdivision == 1, 0, flat_new), #a unit is either a flat or a subdivision, not both, but output will still show mfh
+           sfh_new = ifelse(subdivision == 1, 0, sfh_new), #subdivision trumps sfh 
+           subdivision = ifelse(hmo_new == 1, 0, subdivision)) #hmo trumps subdivision
+           
 #04 Office to rental conversions ----
   #join addresses with building footprint id
   addresses <- st_join(addresses, footprints_2023[, "fid_os"], join = st_intersects, left = TRUE)
