@@ -15,8 +15,10 @@ dat_address <- st_read("G:/ai_daten/P1047_SUBDENSE/liverpool_paper/01_data_input
 # test address data new
 table_dat_address <- dat_address %>% 
   filter(builtup_2011 == 1) %>% 
-  group_by(output, process) %>% 
-  summarise(n = n())
+  group_by(output, process, large_project) %>% 
+  summarise(n = n()) %>% 
+  filter(output != "non-residential") %>% 
+  mutate(perc = round(n/53523*100, 1))
 
 #reduce to grid cells in built-up area 2011
 dens_grid <- dens_grid %>% filter(builtup2011 == 1) %>% 
