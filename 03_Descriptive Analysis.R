@@ -13,12 +13,33 @@ dens_grid <- st_read("G:/ai_daten/P1047_SUBDENSE/liverpool_paper/01_data_input/i
 dat_address <- st_read("G:/ai_daten/P1047_SUBDENSE/liverpool_paper/01_data_input/in_vera/classified_addresses.gpkg") %>% st_drop_geometry() #Pfad Denise
 
 # test address data new
+table_dat_all <- dat_address %>% 
+  filter(builtup_2011 == 1) %>% 
+  filter(output != "non-residential") %>% 
+  filter(output != "existing") %>%
+  group_by() %>% 
+  summarise(n_all = n()) 
+
 table_dat_address <- dat_address %>% 
   filter(builtup_2011 == 1) %>% 
+  filter(output != "non-residential") %>% 
+  filter(output != "existing") %>%
   group_by(output, process, large_project) %>% 
   summarise(n = n()) %>% 
-  filter(output != "non-residential") %>% 
-  mutate(perc = round(n/53523*100, 1))
+  bind_cols(table_dat_all) %>% 
+  mutate(perc = round(n/n_all*100, 1))
+
+sum_outputs <- table_dat_address %>% 
+  group_by(output) %>% 
+  summarise(n = sum(n)) %>% 
+  bind_cols(table_dat_all) %>% 
+  mutate(perc = round(n/n_all*100, 1))
+
+sum_processes <- table_dat_address %>% 
+  group_by(process) %>% 
+  summarise(n = sum(n)) %>% 
+  bind_cols(table_dat_all) %>% 
+  mutate(perc = round(n/n_all*100, 1))
 
 #reduce to grid cells in built-up area 2011
 dens_grid <- dens_grid %>% filter(builtup2011 == 1) %>% 
