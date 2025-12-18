@@ -17,6 +17,7 @@ table_dat_all <- dat_address %>%
   filter(builtup_2011 == 1) %>% 
   filter(output != "non-residential") %>% 
   filter(output != "existing") %>%
+  filter(!(output == "sfh" & process == "subdivision")) %>% 
   group_by() %>% 
   summarise(n_all = n()) 
 
@@ -24,22 +25,23 @@ table_dat_address <- dat_address %>%
   filter(builtup_2011 == 1) %>% 
   filter(output != "non-residential") %>% 
   filter(output != "existing") %>%
+  filter(!(output == "sfh" & process == "subdivision")) %>% 
   group_by(output, process, large_project) %>% 
   summarise(n = n()) %>% 
   bind_cols(table_dat_all) %>% 
-  mutate(perc = round(n/n_all*100, 1))
+  mutate(perc = round(n/n_all*100, 2))
 
 sum_outputs <- table_dat_address %>% 
   group_by(output) %>% 
   summarise(n = sum(n)) %>% 
   bind_cols(table_dat_all) %>% 
-  mutate(perc = round(n/n_all*100, 1))
+  mutate(perc = round(n/n_all*100, 2))
 
 sum_processes <- table_dat_address %>% 
   group_by(process) %>% 
   summarise(n = sum(n)) %>% 
   bind_cols(table_dat_all) %>% 
-  mutate(perc = round(n/n_all*100, 1))
+  mutate(perc = round(n/n_all*100, 2))
 
 #reduce to grid cells in built-up area 2011
 dens_grid <- dens_grid %>% filter(builtup2011 == 1) %>% 
