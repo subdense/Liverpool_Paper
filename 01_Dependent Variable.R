@@ -1,4 +1,6 @@
 #01 SORTING NEW ADDRESSES INTO DENSIFICATION TYPES, AGGREGATE TO HECTARE LEVEL
+#the dependent variables are mutually exclusive and used in the regression
+#the variables 'output' and 'process' allow us to trace back 
 
 library(sf)
 library(dplyr)
@@ -121,11 +123,15 @@ library(tidyr)
 #03 Subdivisions ----
   #mark hunits that overlap with 2013 buildings that exist still in 2023 as subdivision == 1
   #subdivision trumps flat and sfh, but hmo trumps subdivision
+  #subdivision to sfh is ignored
+  #subdivision variable ulitmately only contains new flats in stable footprints
+  
   addresses <- addresses %>%
-    mutate(subdivision = ifelse(hunits_new == 1 & lengths(st_intersects(., stable_bld)) > 0, 1, 0),
-           process = ifelse(subdivision == 1, "subdivision", process), #update process variable
-           flat_new = ifelse(subdivision == 1, 0, flat_new), #a unit is either a flat or a subdivision, not both, but output will still show mfh
-           sfh_new = ifelse(subdivision == 1, 0, sfh_new), #subdivision trumps sfh 
+    mutate(subdivision = ifelse(hunits_new == 1 & lengths(st_intersects(., stable_bld)) > 0, 1, 0), #first, all new hunits in stable footprints are subdi
+           process = ifelse(subdivision == 1, "subdivision", process), #update process variable to subdi for these cases
+           flat_new = ifelse(subdivision == 1, 0, flat_new), #a flat in a stable building is no longer a purpose built flat
+           sfh_new = ifelse(subdivision == 1, 0, sfh_new), #subdivision into sfh is a case we completely ignore - neither subdi nor sfh
+           subdivision = ifelse(output == "sfh", 0, subdivision), 
            subdivision = ifelse(hmo_new == 1, 0, subdivision)) #hmo trumps subdivision
            
 #04 Office to rental conversions ----
@@ -248,7 +254,7 @@ library(tidyr)
   
   #Export addresses----
   addresses[is.na(addresses)] <- 0
-  st_write(addresses, "C:/Users/Vera/Documents/SUBDENSE/Projects/Liverpool_Dembski/R Output/classified_addresses.gpkg")
+  st_write(addresses, "C:/Users/Vera/Documents/SUBDENSE/Projects/Liverpool_Dembski/R Output/classified_addresses.gpkg", append = FALSE)
   
 #10 make grid and join with grid----
   #Create 100m grid using case area polygon
@@ -315,5 +321,5 @@ library(tidyr)
   dens_grid <- dens_grid_joined
   
   #export
-  st_write(dens_grid, "C:/Users/Vera/Documents/SUBDENSE/Projects/Liverpool_Dembski/R Output/grid_depvar.gpkg")
+  st_write(dens_grid, "C:/Users/Vera/Documents/SUBDENSE/Projects/Liverpool_Dembski/R Output/grid_depvar.gpkg", append = FALSE)
   

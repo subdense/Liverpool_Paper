@@ -261,4 +261,13 @@ library(nngeo) #to identify nearest point
   
 #12 Export ----
   st_write(dens_grid, "C:/Users/Vera/Documents/SUBDENSE/Projects/Liverpool_Dembski/R Output/grid_full.gpkg")
+
+
+#00 code to overwrite grid_full with new dependent variables in case i changed things in 01_Dependent Variable.R----
+  setwd("C:/Users/Vera/Documents/SUBDENSE")
+  grid_full <- st_read("Projects/Liverpool_Dembski/R Output/grid_full.gpkg")
+  dens_grid <- read_sf("Projects/Liverpool_Dembski/R Output/grid_depvar.gpkg")
   
+  grid_full <- grid_full %>% select(-c()) %>% st_drop_geometry
+  dens_grid <- left_join(dens_grid, grid_full, by = "grid_id")
+  st_write(dens_grid, "C:/Users/Vera/Documents/SUBDENSE/Projects/Liverpool_Dembski/R Output/grid_full.gpkg", append = FALSE)
