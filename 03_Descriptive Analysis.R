@@ -8,7 +8,7 @@ library(forcats)
 library(corrplot)
 library(svglite)
 
-# dens_grid <- st_read("C:/Users/Vera/Documents/SUBDENSE/Projects/Liverpool_Dembski/R Output/grid_full.gpkg") %>% st_drop_geometry() #Pfad Vera
+# dens_grid <- st_read("R Output/grid_full.gpkg") %>% st_drop_geometry() #Pfad Vera
 dens_grid <- st_read("G:/ai_daten/P1047_SUBDENSE/liverpool_paper/01_data_input/in_vera/grid_full.gpkg") %>% st_drop_geometry() #Pfad Denise
 dat_address <- st_read("G:/ai_daten/P1047_SUBDENSE/liverpool_paper/01_data_input/in_vera/classified_addresses.gpkg") %>% st_drop_geometry() #Pfad Denise
 
@@ -275,7 +275,7 @@ ggsave(file="income_rank.svg", plot= income_rank,
     scale_x_continuous(position = "top") # Move the x-axis to the top
   
   # To save the plot with a transparent background:
-  setwd("~/Documents/SUBDENSE/Projects/Liverpool_Dembski")
+  setwd("/Users/veragoetze/Documents/Liverpool_Paper/R Export")
   ggsave("bar_plot_transparent.png", bg = "transparent")
   
 

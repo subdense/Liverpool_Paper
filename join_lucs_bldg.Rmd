@@ -6,7 +6,7 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_knit$set(root.dir = "C:/Users/Vera/Documents/SUBDENSE/Data")
+knitr::opts_knit$set(root.dir = "/Users/veragoetze/Documents/Liverpool_Paper")
 ```
 
 ## Load libraries
@@ -20,27 +20,29 @@ library(sf)
 ## Load data
 ```{r}
 ## data 2013-2017 identical
-dat_13 <- read.csv("England/LUCS/LUCS_2013-14_addresses.csv")
-dat_14 <- read.csv("England/LUCS/LUCS_2014-15_addresses.csv")
-dat_15 <- read.csv("England/LUCS/LUCS_2015-16_addresses.csv")
-dat_16 <- read.csv("England/LUCS/LUCS_2016-17_addresses.csv")
-dat_17 <- read.csv("England/LUCS/LUCS_2017-18_addresses.csv")
+dat_13 <- read.csv("Input_Data/LUCS/LUCS_2013-14_addresses.csv")
+dat_14 <- read.csv("Input_Data/LUCS/LUCS_2014-15_addresses.csv")
+dat_15 <- read.csv("Input_Data/LUCS/LUCS_2015-16_addresses.csv")
+dat_16 <- read.csv("Input_Data/LUCS/LUCS_2016-17_addresses.csv")
+dat_17 <- read.csv("Input_Data/LUCS/LUCS_2017-18_addresses.csv")
 
 ## data 2018-2021 different structure
-dat_18 <- read.csv("England/LUCS/LUCS_2018-19_addresses.csv")
-dat_19 <- read.csv("England/LUCS/LUCS_2019-20_addresses.csv")
-dat_20 <- read.csv("England/LUCS/LUCS_2020-21_addresses.csv")
-dat_21 <- read.csv("England/LUCS/LUCS_2021-22_addresses.csv")
+dat_18 <- read.csv("Input_Data/LUCS/LUCS_2018-19_addresses.csv")
+dat_19 <- read.csv("Input_Data/LUCS/LUCS_2019-20_addresses.csv")
+dat_20 <- read.csv("Input_Data/LUCS/LUCS_2020-21_addresses.csv")
+dat_21 <- read.csv("Input_Data/LUCS/LUCS_2021-22_addresses.csv")
 
 ## Boundary Liverpool
-liv <- st_read("boundaries/liverpool_metropolitan_dissolved.gpkg")
+liv <- st_read("Input_Data/Liverpool Metropolitan Boundary/liverpool_metropolitan_dissolved.gpkg")
 
 ## Boundary Bristol
-bri <- st_read("boundaries/bcr-lad-avon.gpkg")
+#NOTE: Bristol boundary not in repo. Expected location below.
+bri <- st_read("Input_Data/bcr-lad-avon.gpkg")
 
 ## Building footprints t1
-bldg_23 <- st_read("England/OS MasterMap/Liverpool 2023/footprints_2023.gpkg")
-bldg_23_bri <- st_read("England/OS MasterMap/Bristol 2023/footprints_2023.gpkg")
+#NOTE: OS MasterMap footprints not in repo. Expected locations below.
+bldg_23 <- st_read("Input_Data/OS MasterMap/footprints_2023.gpkg")
+bldg_23_bri <- st_read("Input_Data/OS MasterMap/footprints_2023_bristol.gpkg")
 ```
 
 ## Clean and combine data
@@ -127,8 +129,8 @@ gardens_bri <- joined_bri %>%
 
 ## write data
 ```{r}
-st_write(joined, "lucs_liv.gpkg", delete_layer = TRUE)
-st_write(joined_bri, "lucs_bri.gpkg", delete_layer = TRUE)
+st_write(joined, "R Output/lucs_liv.gpkg", delete_layer = TRUE)
+st_write(joined_bri, "R Output/lucs_bri.gpkg", delete_layer = TRUE)
 ```
 
 

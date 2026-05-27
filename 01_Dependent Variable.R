@@ -9,42 +9,44 @@ library(tidyr)
 
 #00 Read Data----
   
-  setwd("C:/Users/Vera/Documents/SUBDENSE/Data")  
-  
+  setwd("/Users/veragoetze/Documents/Liverpool_Paper")
+
   #boundaries: built-up area 2011 and liverpool case boundary
-  builtup <- read_sf("England/Boundaries/Built_up_Areas_Dec_2011_Boundaries_V2_2022_6094869787211526009.gpkg") %>% select(BUA11CD) #built-up area 2011
-  metro <- read_sf("boundaries/liverpool_metropolitan_dissolved.gpkg")
-  
+  builtup <- read_sf("Input_Data/Built_up_Areas_Dec_2011_Boundaries_V2_2022_6094869787211526009.gpkg") %>% select(BUA11CD) #built-up area 2011
+  metro <- read_sf("Input_Data/Liverpool Metropolitan Boundary/liverpool_metropolitan_dissolved.gpkg")
+
   #addresses: joining addresses with classification file
-  addb_blpu <- st_read("England/AddressBase/0040176195-6425786-1/6425786.gpkg/6425786.gpkg", layer = "blpu")
-  addb_clas <- st_read("England/AddressBase/0040176195-6425786-1/6425786.gpkg/6425786.gpkg", layer = "classification")
-  addresses <- addb_blpu %>% 
-    select(uprn, start_date, end_date) %>% 
-    left_join(addb_clas %>% 
-                transmute(uprn, class_key, classification_code, 
-                          start_date, 
+  #NOTE: AddressBase is licensed data and not in the repo. Expected location: Input_Data/AddressBase/6425786.gpkg
+  addb_blpu <- st_read("Input_Data/AddressBase/6425786.gpkg", layer = "blpu")
+  addb_clas <- st_read("Input_Data/AddressBase/6425786.gpkg", layer = "classification")
+  addresses <- addb_blpu %>%
+    select(uprn, start_date, end_date) %>%
+    left_join(addb_clas %>%
+                transmute(uprn, class_key, classification_code,
+                          start_date,
                           end_date))
   rm(addb_blpu, addb_clas)
-  
+
   #building footprints from 2013 that exist in 2022 for subdivisions
-  stable_bld <- st_read("C:/Users/Vera/Documents/SUBDENSE/Projects/Liverpool_Dembski/Input data for analysis/liv_bldg_densetype.gpkg") %>%
+  stable_bld <- st_read("Input_Data/liv_bldg_densetype.gpkg") %>%
     filter(denstype == 'stable')
-  
+
   #create or read building footprint polygons for 2023
   #library(tidyverse)
   #library(vroom)
   #footprints_2023 <-
-  #  list.files("England/OS MasterMap/Liverpool 2023", full.names = TRUE, recursive = TRUE) %>% 
+  #  list.files("Input_Data/OS MasterMap/Liverpool 2023", full.names = TRUE, recursive = TRUE) %>%
   #  str_subset("gpkg$") %>% # selects all strings ending with gpkg
-  #  map_dfr(read_sf, layer = "Topographicarea") %>% 
+  #  map_dfr(read_sf, layer = "Topographicarea") %>%
   #  filter(theme == "Buildings") %>%
   #  mutate(fid_os = fid) %>% select(-fid) %>%
   #  st_as_sf() %>%
   #  distinct(fid_os, .keep_all = TRUE) #at the tile intersections, buildings are double
-  footprints_2023 <- st_read("England/OS MasterMap/Liverpool 2023/footprints_2023.gpkg")
-  
+  #NOTE: footprints_2023.gpkg is built from the raw OS MasterMap tiles above and is not in the repo. Expected location: Input_Data/OS MasterMap/footprints_2023.gpkg
+  footprints_2023 <- st_read("Input_Data/OS MasterMap/footprints_2023.gpkg")
+
   #import LUCS data where J = Offices and K = Retail
-  lucs <- st_read("England/LUCS/lucs_liv.gpkg") %>% 
+  lucs <- st_read("Input_Data/LUCS/lucs_liv.gpkg") %>%
     st_drop_geometry() %>%
     select(c(fid_os, V_FROM_CODE, LUCS_FROM_CODE, COMPLETIONS, CONVERSIONS_TORESIDENTIAL)) %>%
     filter(LUCS_FROM_CODE == "J" | LUCS_FROM_CODE == "K") %>% #filter to conversions
@@ -254,8 +256,66 @@ library(tidyr)
   
   #Export addresses----
   addresses[is.na(addresses)] <- 0
-  st_write(addresses, "C:/Users/Vera/Documents/SUBDENSE/Projects/Liverpool_Dembski/R Output/classified_addresses.gpkg", append = FALSE)
-  
+  st_write(addresses, "R Output/classified_addresses.gpkg", append = FALSE)
+
+#09b Report: new housing units inside vs outside built-up area ----
+  #This block can also be run standalone against an already-exported classified_addresses.gpkg.
+  #If `addresses` is not in the workspace, uncomment and set the path below.
+  # addresses <- st_read("path/to/classified_addresses.gpkg")
+
+  a <- addresses %>% st_drop_geometry()
+  new_units <- a %>% filter(hunits_new == 1)
+
+  cat("\n================ NEW HOUSING UNITS: BUA BREAKDOWN ================\n")
+  cat("Total addresses in file: ", nrow(a), "\n", sep = "")
+  cat("Total new housing units (hunits_new == 1): ", nrow(new_units), "\n\n", sep = "")
+
+  n_in  <- sum(new_units$builtup_2011 == 1)
+  n_out <- sum(new_units$builtup_2011 != 1)  # NAs were turned to 0 above, so this = outside / unassigned
+  cat("--- Using script's builtup_2011 flag (cluster 80% rule + point-in-BUA) ---\n")
+  cat(sprintf("  Inside BUA  (densification): %7d  (%.1f%%)\n", n_in,  100 * n_in  / nrow(new_units)))
+  cat(sprintf("  Outside BUA                : %7d  (%.1f%%)\n", n_out, 100 * n_out / nrow(new_units)))
+  cat(sprintf("  hunits_dens column check    : %7d\n\n", sum(a$hunits_dens == 1)))
+
+  cat("--- Inside BUA, by category (final classification) ---\n")
+  cat(sprintf("  flat_dens          : %6d\n", sum(a$flat_dens == 1)))
+  cat(sprintf("  sfh_dens           : %6d\n", sum(a$sfh_dens  == 1)))
+  cat(sprintf("  hmo_dens           : %6d\n", sum(a$hmo_dens  == 1)))
+  cat(sprintf("  subdivision (BUA)  : %6d\n", sum(a$subdivision == 1 & a$builtup_2011 == 1)))
+  cat(sprintf("  office_retail (BUA): %6d\n", sum(a$office_retail == 1 & a$builtup_2011 == 1)))
+  sum_cats_in <- sum(a$flat_dens == 1) + sum(a$sfh_dens == 1) + sum(a$hmo_dens == 1) +
+                 sum(a$subdivision == 1 & a$builtup_2011 == 1) +
+                 sum(a$office_retail == 1 & a$builtup_2011 == 1)
+  cat(sprintf("  SUM of categories  : %6d   (hunits_dens = %d, diff = %d)\n\n",
+              sum_cats_in, sum(a$hunits_dens == 1), sum_cats_in - sum(a$hunits_dens == 1)))
+
+  cat("--- Outside BUA, by ORIGINAL classification (using `output`) ---\n")
+  out_units <- new_units %>% filter(builtup_2011 != 1)
+  print(out_units %>% count(output))
+  cat("\n  flat_new outside BUA   : ", sum(out_units$flat_new == 1), "\n", sep = "")
+  cat("  sfh_new outside BUA    : ", sum(out_units$sfh_new  == 1), "\n", sep = "")
+  cat("  hmo_new outside BUA    : ", sum(out_units$hmo_new  == 1), "\n", sep = "")
+  cat("  subdivision outside BUA: ", sum(out_units$subdivision == 1), "\n", sep = "")
+  cat("  office_retail outside  : ", sum(out_units$office_retail == 1), "\n\n", sep = "")
+
+  cat("--- Cluster 80%-rule effect (potential inflation of densification) ---\n")
+  in_cluster <- new_units %>% filter(cluster_id > 0)
+  individual <- new_units %>% filter(cluster_id == 0)
+  cat(sprintf("  New units in clusters    : %6d   inside BUA: %6d   outside BUA: %6d\n",
+              nrow(in_cluster), sum(in_cluster$builtup_2011 == 1), sum(in_cluster$builtup_2011 != 1)))
+  cat(sprintf("  New units NOT in clusters: %6d   inside BUA: %6d   outside BUA: %6d\n",
+              nrow(individual), sum(individual$builtup_2011 == 1), sum(individual$builtup_2011 != 1)))
+  cat("  (Note: cluster points get builtup_2011 = 1 if >=80%% of the cluster is in BUA,\n",
+      "   so individual cluster points outside BUA can be counted as densification.)\n\n", sep = "")
+
+  cat("--- `process` field summary (set to 0 / NA for non-BUA before export) ---\n")
+  print(a %>% filter(hunits_new == 1) %>% count(process))
+  cat("\n--- `output` field summary (original classification, all addresses) ---\n")
+  print(a %>% count(output))
+  cat("==================================================================\n")
+
+  rm(a, new_units, out_units, in_cluster, individual)
+
 #10 make grid and join with grid----
   #Create 100m grid using case area polygon
   grid <- st_make_grid(metro, cellsize = 100) #creating the grid with bounding box of case area
@@ -307,7 +367,7 @@ library(tidyr)
   dens_grid <- st_as_sf(dens_grid, sf_column_name = "geometry")
   
   #for comparison, add the office retail conversion count from the lucs data? 
-  lucs <- st_read("England/LUCS/lucs_liv.gpkg") %>% 
+  lucs <- st_read("Input_Data/LUCS/lucs_liv.gpkg") %>%
     select(c(V_FROM_CODE, LUCS_FROM_CODE, COMPLETIONS, CONVERSIONS_TORESIDENTIAL)) %>%
     filter(LUCS_FROM_CODE == "J" | LUCS_FROM_CODE == "K") %>% #filter to conversions
     mutate(count = COMPLETIONS + CONVERSIONS_TORESIDENTIAL) %>%
@@ -321,5 +381,5 @@ library(tidyr)
   dens_grid <- dens_grid_joined
   
   #export
-  st_write(dens_grid, "C:/Users/Vera/Documents/SUBDENSE/Projects/Liverpool_Dembski/R Output/grid_depvar.gpkg", append = FALSE)
+  st_write(dens_grid, "R Output/grid_depvar.gpkg", append = FALSE)
   

@@ -10,11 +10,12 @@ library(nngeo) #to identify nearest point
 #library(classInt) #for jenks breaks
 
 #00 Read data ----
-  setwd("C:/Users/Vera/Documents/SUBDENSE/Data")
-  dens_grid <- read_sf("C:/Users/Vera/Documents/SUBDENSE/Projects/Liverpool_Dembski/R Output/grid_depvar.gpkg")
-  metro <- read_sf("boundaries/liverpool_metropolitan_dissolved.gpkg")
-  builtup <- read_sf("England/Boundaries/Built_up_Areas_Dec_2011_Boundaries_V2_2022_6094869787211526009.gpkg") %>% select(BUA11CD)
-  lsoa <- st_read("England/Boundaries/glcr-lsoa-2011.gpkg") %>% select(LSOA11CD)
+  setwd("/Users/veragoetze/Documents/Liverpool_Paper")
+  dens_grid <- read_sf("R Output/grid_depvar.gpkg")
+  metro <- read_sf("Input_Data/Liverpool Metropolitan Boundary/liverpool_metropolitan_dissolved.gpkg")
+  builtup <- read_sf("Input_Data/Built_up_Areas_Dec_2011_Boundaries_V2_2022_6094869787211526009.gpkg") %>% select(BUA11CD)
+  #NOTE: LSOA boundary file not in repo. Expected location below.
+  lsoa <- st_read("Input_Data/glcr-lsoa-2011.gpkg") %>% select(LSOA11CD)
   
   #00.1 OSM data: amenities and parks----
   #this downloads the latest version, if you want earlier snapshots, go to Geofabrik
@@ -57,18 +58,19 @@ library(nngeo) #to identify nearest point
     rm(query1, query2, query3, osm_data1, osm_data2, osm_data3, points_data, parks_polygons)
   
   #00.2 Train stations from open map tiles ----
-    stations <- 
-      c("opmplc_essh_sj/OS OpenMap Local (ESRI Shape File) SJ/data/SJ_RailwayStation.shp",
-        "opmplc_essh_sd/OS OpenMap Local (ESRI Shape File) SD/data/SD_RailwayStation.shp") %>%
+    #NOTE: OS OpenMap Local rail station shapefiles not in repo. Expected locations below.
+    stations <-
+      c("Input_Data/OS OpenMap Local/SJ_RailwayStation.shp",
+        "Input_Data/OS OpenMap Local/SD_RailwayStation.shp") %>%
       lapply(st_read, quiet = TRUE) %>% # Read each shapefile
       lapply(select, CLASSIFICA) %>%
       do.call(rbind, .)
     stations <- st_zm(stations, drop = TRUE, what = "ZM")
   #00.3 ORS Driving distance to liverpool central station----
-    regacc_ors <- st_read("trains/distance_matrices/ors_carduration_livmanstation.gpkg") %>% st_transform(regacc_ors, crs = 27700) %>% select(min_to_livmain)
-    
+    regacc_ors <- st_read("Input_Data/ors_carduration_livmanstation.gpkg") %>% st_transform(regacc_ors, crs = 27700) %>% select(min_to_livmain)
+
   #00.4 Dominant age in LSOA in 2011----
-    age <- read.csv("construction_year/ctsop4-1-1993-2021__5_/CTSOP4_1_2011_03_31.csv") %>% 
+    age <- read.csv("Input_Data/CTSOP4_1_2011_03_31.csv") %>%
       filter(band == "All") %>%
       rename(LSOA11CD = ecode) %>%
       #regrouping the construction periods
@@ -81,18 +83,19 @@ library(nngeo) #to identify nearest point
       select(LSOA11CD, p_pre1919)
     
   #00.5 Deprivation and income----
-    depri <- read.csv("England/Drivers Liverpool/English_Welsh_Deprivation/File_1_ID_2015_Index_of_Multiple_Deprivation.csv") %>% 
-      select(c(1,5,6)) %>% 
-      rename(LSOA11CD = 1, Rank = 2, deprivation = 3) 
-    
-    depri$Rank <- as.numeric(gsub(",", ".", depri$Rank)) 
-    
-    income <- read.csv("England/Drivers Liverpool/English_Welsh_Deprivation/English Indices of Deprivation_Income_2010.csv") %>% 
-      select(c(1,7)) %>% 
-      rename(LSOA11CD = 1, income_rank = 2) 
-    
+    depri <- read.csv("Input_Data/File_1_ID_2015_Index_of_Multiple_Deprivation.csv") %>%
+      select(c(1,5,6)) %>%
+      rename(LSOA11CD = 1, Rank = 2, deprivation = 3)
+
+    depri$Rank <- as.numeric(gsub(",", ".", depri$Rank))
+
+    income <- read.csv("Input_Data/English Indices of Deprivation_Income_2010.csv") %>%
+      select(c(1,7)) %>%
+      rename(LSOA11CD = 1, income_rank = 2)
+
   #00.6 Landuse ----
-    clc <- st_read("landuse/corine/U2018_CLC2012_V2020_20u1.gpkg") #automatically chooses the first layer (the others are French islands)
+    #NOTE: Corine Land Cover file not in repo. Expected location below.
+    clc <- st_read("Input_Data/U2018_CLC2012_V2020_20u1.gpkg") #automatically chooses the first layer (the others are French islands)
     metro_84 <- st_transform(metro, st_crs(clc)) #set case area crs to clc crs
     clc_liverpool <- st_filter(clc, metro_84, .predicate = st_intersects) #reduce clc to liverpool region
     clc_liverpool <- st_transform(clc_liverpool, crs = 27700) #set to crs = 27700
@@ -124,7 +127,7 @@ library(nngeo) #to identify nearest point
     rm(clc, metro_84, clc_liverpool)
     
   #00.7 Socio-economic neighborhood type----
-    oa_c <- read_sf("England/OA Classification/2011_OAC.shp") %>%
+    oa_c <- read_sf("Input_Data/OA Classification/2011_OAC.shp") %>%
       select(c(SPRGRP, GRP, SUBGRP)) 
       
     
@@ -221,7 +224,7 @@ library(nngeo) #to identify nearest point
   rm(buffer_df, dens_groups, filtered_data, nb_counts)
   
 #07 Share SFH in 3x3 cell neighborhood 2013 ----
-  hunits <- read_sf("C:/Users/Vera/Documents/SUBDENSE/Projects/Liverpool_Dembski/R Output/classified_addresses.gpkg") %>%
+  hunits <- read_sf("R Output/classified_addresses.gpkg") %>%
     filter(hunits_2013 > 0) %>%
     select(c(sfh_2013, hunits_2013))
   
@@ -260,14 +263,14 @@ library(nngeo) #to identify nearest point
   dens_grid <- dens_grid %>% mutate(builtup2011 = as.integer(lengths(st_intersects(., builtup)) > 0))
   
 #12 Export ----
-  st_write(dens_grid, "C:/Users/Vera/Documents/SUBDENSE/Projects/Liverpool_Dembski/R Output/grid_full.gpkg")
+  st_write(dens_grid, "R Output/grid_full.gpkg")
 
 
 #00 code to overwrite grid_full with new dependent variables in case i changed things in 01_Dependent Variable.R----
-  setwd("C:/Users/Vera/Documents/SUBDENSE")
-  grid_full <- st_read("Projects/Liverpool_Dembski/R Output/grid_full.gpkg")
-  dens_grid <- read_sf("Projects/Liverpool_Dembski/R Output/grid_depvar.gpkg")
-  
+  setwd("/Users/veragoetze/Documents/Liverpool_Paper")
+  grid_full <- st_read("R Output/grid_full.gpkg")
+  dens_grid <- read_sf("R Output/grid_depvar.gpkg")
+
   grid_full <- grid_full %>% select(-c()) %>% st_drop_geometry
   dens_grid <- left_join(dens_grid, grid_full, by = "grid_id")
-  st_write(dens_grid, "C:/Users/Vera/Documents/SUBDENSE/Projects/Liverpool_Dembski/R Output/grid_full.gpkg", append = FALSE)
+  st_write(dens_grid, "R Output/grid_full.gpkg", append = FALSE)
