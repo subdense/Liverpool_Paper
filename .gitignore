@@ -3,3 +3,10 @@
 .RData
 .Ruserdata
 .html
+.DS_Store
+
+# data folders (not tracked in git)
+Input_Data/
+R Output/
+R Export/
+Output of analysis/
