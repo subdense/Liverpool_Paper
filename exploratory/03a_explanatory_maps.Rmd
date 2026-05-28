@@ -19,10 +19,14 @@ library(dplyr)
 library(classInt)
 ```
 
+```{r setup, include=FALSE}
+# Exploratory notebook. This file lives in exploratory/; root.dir is set to the project root.
+knitr::opts_knit$set(root.dir = "..")
+```
 
 ```{r read data, include=FALSE}
-liv_outline <- st_read("G:/ai_daten/P1047_SUBDENSE/liverpool_paper/01_data_input/liverpool_metropolitan_dissolved.gpkg")
-dens_grid_geom <- st_read("G:/ai_daten/P1047_SUBDENSE/liverpool_paper/01_data_input/in_vera/251017/grid_full.gpkg")
+liv_outline <- st_read("Input_Data/Liverpool Metropolitan Boundary/liverpool_metropolitan_dissolved.gpkg")
+dens_grid_geom <- st_read("R Output/grid_full.gpkg")
 ```
 
 ```{r, include=FALSE}

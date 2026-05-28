@@ -8,9 +8,9 @@ library(forcats)
 library(corrplot)
 library(svglite)
 
-# dens_grid <- st_read("R Output/grid_full.gpkg") %>% st_drop_geometry() #Pfad Vera
-dens_grid <- st_read("G:/ai_daten/P1047_SUBDENSE/liverpool_paper/01_data_input/in_vera/grid_full.gpkg") %>% st_drop_geometry() #Pfad Denise
-dat_address <- st_read("G:/ai_daten/P1047_SUBDENSE/liverpool_paper/01_data_input/in_vera/classified_addresses.gpkg") %>% st_drop_geometry() #Pfad Denise
+# Run from the project root (open Liverpool_Paper.Rproj in RStudio).
+dens_grid <- st_read("R Output/grid_full.gpkg") %>% st_drop_geometry()
+dat_address <- st_read("R Output/classified_addresses.gpkg") %>% st_drop_geometry()
 
 # test address data new
 table_dat_all <- dat_address %>% 
@@ -142,7 +142,7 @@ dat_explanatory$type <- ordered(dat_explanatory$type,
 # plot for all numeric variables
 
 # where to save
-out_dir <- "G:/ai_daten/P1047_SUBDENSE/exchange_tarox/liverpool/boxplots"
+out_dir <- "R Export/boxplots"
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
 # pick the numeric columns to plot on the x-axis
@@ -208,11 +208,12 @@ income_rank <-
 
 
 library(svglite)
-ggsave(file="m_to_train.svg", plot= m_to_train, 
-       device = "svg", path = "G:/ai_daten/P1047_SUBDENSE/liverpool_paper/figures", width=3.5, height=1.5)
+dir.create("R Export/figures", showWarnings = FALSE, recursive = TRUE)
+ggsave(file="m_to_train.svg", plot= m_to_train,
+       device = "svg", path = "R Export/figures", width=3.5, height=1.5)
 
-ggsave(file="income_rank.svg", plot= income_rank, 
-       device = "svg", path = "G:/ai_daten/P1047_SUBDENSE/liverpool_paper/figures", width=3.5, height=1.5)
+ggsave(file="income_rank.svg", plot= income_rank,
+       device = "svg", path = "R Export/figures", width=3.5, height=1.5)
 
 
 
@@ -275,8 +276,7 @@ ggsave(file="income_rank.svg", plot= income_rank,
     scale_x_continuous(position = "top") # Move the x-axis to the top
   
   # To save the plot with a transparent background:
-  setwd("/Users/veragoetze/Documents/Liverpool_Paper/R Export")
-  ggsave("bar_plot_transparent.png", bg = "transparent")
+  ggsave("R Export/bar_plot_transparent.png", bg = "transparent")
   
 
 #Correlation----

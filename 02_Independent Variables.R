@@ -10,7 +10,7 @@ library(nngeo) #to identify nearest point
 #library(classInt) #for jenks breaks
 
 #00 Read data ----
-  setwd("/Users/veragoetze/Documents/Liverpool_Paper")
+  # Run from the project root (open Liverpool_Paper.Rproj in RStudio, or setwd() to the repo root).
   dens_grid <- read_sf("R Output/grid_depvar.gpkg")
   metro <- read_sf("Input_Data/Liverpool Metropolitan Boundary/liverpool_metropolitan_dissolved.gpkg")
   builtup <- read_sf("Input_Data/Built_up_Areas_Dec_2011_Boundaries_V2_2022_6094869787211526009.gpkg") %>% select(BUA11CD)
@@ -267,7 +267,6 @@ library(nngeo) #to identify nearest point
 
 
 #00 code to overwrite grid_full with new dependent variables in case i changed things in 01_Dependent Variable.R----
-  setwd("/Users/veragoetze/Documents/Liverpool_Paper")
   grid_full <- st_read("R Output/grid_full.gpkg")
   dens_grid <- read_sf("R Output/grid_depvar.gpkg")
 

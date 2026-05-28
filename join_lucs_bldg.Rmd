@@ -6,7 +6,7 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_knit$set(root.dir = "/Users/veragoetze/Documents/Liverpool_Paper")
+# Knit from the project root. Open Liverpool_Paper.Rproj first so the working directory is set.
 ```
 
 ## Load libraries

@@ -21,10 +21,8 @@ library(officer)
 options(scipen = 999)
 
 #READ DATA----
-#setwd("/Users/veragoetze/Documents/Liverpool_Paper")
-setwd("G:/ai_daten/P1047_SUBDENSE/liverpool_paper")
-dens_grid <- st_read("G:/ai_daten/P1047_SUBDENSE/liverpool_paper/01_data_input/in_vera/grid_full.gpkg") %>% #Pfad Denise
-# dens_grid <- st_read("R Output/grid_full.gpkg") %>%
+# Run from the project root (open Liverpool_Paper.Rproj in RStudio).
+dens_grid <- st_read("R Output/grid_full.gpkg") %>%
   filter(builtup2011 == 1) %>% #from now on only interested in cells in builtup area
   #all cells that don't overlap with special non-residential land uses have NA but should be 0
   mutate(across(c(nature,agriculture, industry, water,sports,parks,port,airport,dump,rail), ~ replace_na(.x, 0))) %>%
@@ -291,7 +289,6 @@ doc <- read_docx() %>%
   body_add_par("Regression Results (grouped by dependent variable)", style = "heading 1") %>%
   body_add_flextable(ft)
 
-print(doc, target = "02_data_prep_output/table_allgrid.docx") # Pfad Denise
-#print(doc, target = "R Export/model_results_grouped.docx")
+print(doc, target = "R Export/table_allgrid.docx")
 
 

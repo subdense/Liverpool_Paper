@@ -1,12 +1,18 @@
+# R / RStudio
 .Rproj.user
 .Rhistory
 .RData
 .Ruserdata
-.html
+
+# Knitted output (regenerated from .Rmd)
+*.html
+
+# macOS
 .DS_Store
 
-# data folders (not tracked in git)
-Input_Data/
+# Data and output folders (not tracked in git — see README for provenance)
+Input_Data/*
+!Input_Data/README.md
 R Output/
 R Export/
 Output of analysis/

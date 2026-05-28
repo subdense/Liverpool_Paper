@@ -8,8 +8,8 @@ library(dbscan)
 library(tidyr)
 
 #00 Read Data----
-  
-  setwd("/Users/veragoetze/Documents/Liverpool_Paper")
+  # Run from the project root (open Liverpool_Paper.Rproj in RStudio, or setwd() to the repo root before sourcing).
+  # All paths below are relative to that root.
 
   #boundaries: built-up area 2011 and liverpool case boundary
   builtup <- read_sf("Input_Data/Built_up_Areas_Dec_2011_Boundaries_V2_2022_6094869787211526009.gpkg") %>% select(BUA11CD) #built-up area 2011
@@ -52,34 +52,7 @@ library(tidyr)
     filter(LUCS_FROM_CODE == "J" | LUCS_FROM_CODE == "K") %>% #filter to conversions
     mutate(office_retail = 1) %>%
     select(-V_FROM_CODE, -LUCS_FROM_CODE)
-  
-  #00 Read Data Denise----
-  setwd("G:/ai_daten/P1047_SUBDENSE/liverpool_paper")
-  
-  #boundaries: built-up area 2011 and liverpool case boundary
-  builtup <- read_sf("01_data_input/Built_up_Areas_Dec_2011_Boundaries_V2_2022_6094869787211526009.gpkg") %>% select(BUA11CD) #built-up area 2011
-  metro <- read_sf("01_data_input/liverpool_metropolitan_dissolved.gpkg")
-  
-  #addresses: joining addresses with classification file
-  addb_blpu <- st_read("G:/ai_daten/P1047_SUBDENSE/01_raw_data/UK/OS/AddressBase/AddressBase/0040176195-6425786-1/6425786.gpkg/6425786.gpkg", layer = "blpu")
-  addb_clas <- st_read("G:/ai_daten/P1047_SUBDENSE/01_raw_data/UK/OS/AddressBase/AddressBase/0040176195-6425786-1/6425786.gpkg/6425786.gpkg", layer = "classification")
-  addresses <- addb_blpu %>% 
-    select(uprn, start_date, end_date) %>% 
-    left_join(addb_clas %>% 
-                transmute(uprn, class_key, classification_code, 
-                          start_date, 
-                          end_date))
-  rm(addb_blpu, addb_clas)
-  
-  #building footprints from 2013 that exist in 2023 for subdivisions
-  stable_bld <- st_read("G:/ai_daten/P1047_SUBDENSE/liverpool_paper/02_data_prep_output/liv_bldg_densetype.gpkg") %>%
-    filter(denstype == 'stable')
-  
-  footprints_2023 <- st_read("G:/ai_daten/P1047_SUBDENSE/liverpool_paper/Projects/Liverpool_Dembski/OneDrive_2025-10-02/Input data for analysis/OS MasterMap/Liverpool City Region/2023/footprints_2023.gpkg")
-  
-  footprints_2023v2 <- st_read("G:/ai_daten/P1047_SUBDENSE/liverpool_paper/02_data_prep_output/liv_bldg_2023.gpkg")
-  
-  
+
 #01 Filter to addresses in case area ----
   
   addresses <- addresses[st_within(addresses, metro, sparse = FALSE), ]

@@ -21,10 +21,8 @@ options(scipen = 999)
 
 
 #READ DATA (same path logic as script 04) ----
-# setwd("/Users/veragoetze/Documents/Liverpool_Paper")
-setwd("G:/ai_daten/P1047_SUBDENSE/liverpool_paper")
-dens_grid <- st_read("G:/ai_daten/P1047_SUBDENSE/liverpool_paper/01_data_input/in_vera/grid_full.gpkg") %>% #Pfad Denise
-# dens_grid <- st_read("R Output/grid_full.gpkg") %>%
+# Run from the project root (open Liverpool_Paper.Rproj in RStudio).
+dens_grid <- st_read("R Output/grid_full.gpkg") %>%
   filter(builtup2011 == 1) %>%
   mutate(across(c(nature, agriculture, industry, water, sports, parks, port, airport, dump, rail),
                 ~ replace_na(.x, 0))) %>%
@@ -222,7 +220,7 @@ doc <- read_docx() %>%
   body_add_flextable(ft) %>%
   body_end_block_section(block_section(landscape_section))
 
-print(doc, target = "R Export/table_descriptive_stats.docx") # Pfad Vera
+print(doc, target = "R Export/table_descriptive_stats.docx")
 
 # also write a plain CSV for quick inspection
 write.csv(desc_tbl,
