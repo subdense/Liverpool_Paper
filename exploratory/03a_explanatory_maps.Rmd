@@ -17,6 +17,8 @@ library(sf)
 library(ggplot2)
 library(dplyr)
 library(classInt)
+library(ggspatial)
+library(patchwork)
 ```
 
 ```{r setup, include=FALSE}
@@ -25,8 +27,8 @@ knitr::opts_knit$set(root.dir = "..")
 ```
 
 ```{r read data, include=FALSE}
-liv_outline <- st_read("Input_Data/Liverpool Metropolitan Boundary/liverpool_metropolitan_dissolved.gpkg")
-dens_grid_geom <- st_read("R Output/grid_full.gpkg")
+liv_outline <- st_read("../Input_Data/Liverpool Metropolitan Boundary/liverpool_metropolitan_dissolved.gpkg")
+dens_grid_geom <- st_read("../R Output/grid_full.gpkg")
 ```
 
 ```{r, include=FALSE}
@@ -43,7 +45,6 @@ data <- dens_grid_geom %>% filter(builtup2011 == 1) %>%
 
 names(data)
 ```
-
 
 ```{r, include=FALSE}
 # Function for maps numeric using jenks/fisher
@@ -72,14 +73,15 @@ dataset_new
 ```
 
 # Maps explanatory variables
-## Minutes to train
+### Distance to train stations
 
 ```{r, echo=FALSE, warning=FALSE}
-var_name <- "Minutes to train"
-unit <- " min"
+var_name <- "Distance to train stations \n(Euclidian distance in meter)"
+unit <- " m"
 
 dataset_new <- compute_fisher(data, m_to_train)
 
+plot_m_to_train <- 
 ggplot(dataset_new) +
   geom_sf(aes(fill = jenks_group), color = NA) +
   scale_fill_viridis_d(option = "plasma", 
@@ -91,17 +93,23 @@ ggplot(dataset_new) +
     axis.text = element_blank(),    # remove numbers
     axis.ticks = element_blank(),   # remove tick marks
     axis.title = element_blank()    # remove axis titles
-  )
+  ) 
+
+plot_m_to_train
+
+# ggsave(paste0("../R Export/plot_", var_name, ".jpg"),
+#        plot = plot_m_to_train, device = "jpg")
 ```
 
-## Minutes to Liverpool center
+### Minutes to Liverpool center
 
 ```{r, echo=FALSE, warning=FALSE}
-var_name <- "Minutes to Liverpool center"
+var_name <- "Distance to Liverpool center \n(Driving time by car)"
 unit <- " min"
 
 dataset_new <- compute_fisher(data, min_to_livmain)
 
+plot_min_to_livmain <- 
 ggplot(dataset_new) +
   geom_sf(aes(fill = jenks_group), color = NA) +
   scale_fill_viridis_d(option = "plasma", 
@@ -114,10 +122,15 @@ ggplot(dataset_new) +
     axis.ticks = element_blank(),   # remove tick marks
     axis.title = element_blank()    # remove axis titles
   )
+
+plot_min_to_livmain
+
+# ggsave(paste0("../R Export/plot_", var_name, ".jpg"),
+#        plot = plot_min_to_livmain, device = "jpg")
 ```
 
 
-## Amenity count
+### Amenity count
 
 ```{r, echo=FALSE, warning=FALSE}
 var_name <- "Amenity count"
@@ -125,6 +138,7 @@ unit <- " "
 
 dataset_new <- compute_fisher(data, amenity_count)
 
+plot_amenity_count <- 
 ggplot(dataset_new) +
   geom_sf(aes(fill = jenks_group), color = NA) +
   scale_fill_viridis_d(option = "viridis", 
@@ -136,17 +150,23 @@ ggplot(dataset_new) +
     axis.text = element_blank(),    # remove numbers
     axis.ticks = element_blank(),   # remove tick marks
     axis.title = element_blank()    # remove axis titles
-  )
+  ) 
+
+plot_amenity_count
+
+# ggsave(paste0("../R Export/plot_", var_name, ".jpg"),
+#        plot = plot_amenity_count, device = "jpg")
 ```
 
-## No. low density neighbors
+### No. low density neighbors
 
 ```{r, echo=FALSE, warning=FALSE}
-var_name <- "No. low density neighbors"
+var_name <- "Number of low density \ncells in neighbourhood"
 unit <- " "
 
 dataset_new <- compute_fisher(data, nb11_LDcount)
 
+plot_nb11_LDcount <- 
 ggplot(dataset_new) +
   geom_sf(aes(fill = jenks_group), color = NA) +
   scale_fill_viridis_d(option = "viridis", 
@@ -159,16 +179,22 @@ ggplot(dataset_new) +
     axis.ticks = element_blank(),   # remove tick marks
     axis.title = element_blank()    # remove axis titles
   )
+
+plot_nb11_LDcount
+
+# ggsave(paste0("../R Export/plot_", var_name, ".jpg"),
+#        plot = plot_nb11_LDcount, device = "jpg")
 ```
 
-## No. high density neighbors
+### No. high density neighbors
 
 ```{r, echo=FALSE, warning=FALSE}
-var_name <- "No. high density neighbors"
+var_name <- "Number of high density \ncells in neighbourhood"
 unit <- " "
 
 dataset_new <- compute_fisher(data, nb11_HDcount)
 
+plot_nb11_HDcount <- 
 ggplot(dataset_new) +
   geom_sf(aes(fill = jenks_group), color = NA) +
   scale_fill_viridis_d(option = "viridis", 
@@ -180,17 +206,23 @@ ggplot(dataset_new) +
     axis.text = element_blank(),    # remove numbers
     axis.ticks = element_blank(),   # remove tick marks
     axis.title = element_blank()    # remove axis titles
-  )
+  ) 
+
+plot_nb11_HDcount
+
+# ggsave(paste0("../R Export/plot_", var_name, ".jpg"),
+#        plot = plot_nb11_HDcount, device = "jpg")
 ```
 
-## No. NB count
+### No. NB count
 
 ```{r, echo=FALSE, warning=FALSE}
-var_name <- "No. NB count"
+var_name <- "Number of unbuilt cells \nin neighbourhood"
 unit <- " "
 
 dataset_new <- compute_fisher(data, nb11_NBcount)
 
+plot_nb11_NBcount <- 
 ggplot(dataset_new) +
   geom_sf(aes(fill = jenks_group), color = NA) +
   scale_fill_viridis_d(option = "viridis", 
@@ -203,16 +235,22 @@ ggplot(dataset_new) +
     axis.ticks = element_blank(),   # remove tick marks
     axis.title = element_blank()    # remove axis titles
   )
+
+plot_nb11_NBcount
+
+# ggsave(paste0("../R Export/plot_", var_name, ".jpg"),
+#        plot = plot_nb11_NBcount, device = "jpg")
 ```
 
-## Level of deprivation
+### Deprivation decile
 
 ```{r, echo=FALSE, warning=FALSE}
-var_name <- "Level of deprivation"
+var_name <- "Deprivation decile"
 unit <- " "
 
 dataset_new <- compute_fisher(data, deprivation)
 
+plot_deprivation <- 
 ggplot(dataset_new) +
   geom_sf(aes(fill = jenks_group), color = NA) +
   scale_fill_viridis_d(option = "magma", 
@@ -224,54 +262,74 @@ ggplot(dataset_new) +
     axis.text = element_blank(),    # remove numbers
     axis.ticks = element_blank(),   # remove tick marks
     axis.title = element_blank()    # remove axis titles
-  )
+  ) 
+
+plot_deprivation
+
+# ggsave(paste0("../R Export/plot_", var_name, ".jpg"),
+#        plot = plot_deprivation, device = "jpg")
 ```
 
 
-## SFH Share
+### SFH dominant
 
 ```{r, echo=FALSE, warning=FALSE}
-var_name <- "SFH Share"
+var_name <- "Single-family housing \ndominant"
 unit <- " %"
 
+plot_sfh_share <- 
 data %>% 
   ggplot()+
   geom_sf(aes(fill = sfh_share), color = NA)+
-  scale_fill_viridis_c(option = "plasma", direction = -1  ) +     # use -1 to reverse
+  scale_fill_viridis_c(option = "plasma", direction = -1, 
+                       name = var_name  ) +     # use -1 to reverse
   theme_minimal()+
   geom_sf(data = liv_outline, fill = NA, color = "grey", size = 0.1) +
     theme(
     axis.text = element_blank(),    # remove numbers
     axis.ticks = element_blank(),   # remove tick marks
     axis.title = element_blank()    # remove axis titles
-  )
+  ) 
+
+plot_sfh_share
+
+# ggsave(paste0("../R Export/plot_", var_name, ".jpg"),
+#        plot = plot_sfh_share, device = "jpg")
 ```
 
-## Perc. buildings pre 1919
+### Perc. buildings pre 1919
 
 ```{r, echo=FALSE, warning=FALSE}
-var_name <- "erc. buildings pre 1919"
+var_name <- "Share of buildings with \nconstruction year pre 1919"
 unit <- " %"
 
+plot_p_pre1919 <- 
 data %>% 
   ggplot()+
   geom_sf(aes(fill = p_pre1919), color = NA)+
-  scale_fill_viridis_c(option = "plasma", direction = -1  ) +     # use -1 to reverse
+  scale_fill_viridis_c(option = "plasma", direction = -1, 
+                       name = var_name  ) +     # use -1 to reverse
   theme_minimal()+
   geom_sf(data = liv_outline, fill = NA, color = "grey", size = 0.1) +
     theme(
     axis.text = element_blank(),    # remove numbers
     axis.ticks = element_blank(),   # remove tick marks
     axis.title = element_blank()    # remove axis titles
-  )
+  ) 
+
+plot_p_pre1919
+
+# ggsave(paste0("../R Export/plot_", var_name, ".jpg"),
+#        plot = plot_p_pre1919, device = "jpg")
 ```
 
-## dens_group11
+### dens_group11
 
 ```{r, echo=FALSE, warning=FALSE}
 var_name <- "dens_group11"
 unit <- " "
 
+plot_dens_group11 <- 
 data %>% 
   ggplot()+
   geom_sf(aes(fill = dens_group11), color = NA)+
@@ -282,7 +340,7 @@ data %>%
       "MD" = "#ffffbf",  # medium green
       "HD" = "#fc8d59"),   # dark teal
   breaks = c("NB", "LD", "MD", "HD"),
-  name = "Density group"
+  name = var_name
 ) +
     theme_minimal()+
   geom_sf(data = liv_outline, fill = NA, color = "grey", size = 0.1) +
@@ -290,19 +348,27 @@ data %>%
     axis.text = element_blank(),    # remove numbers
     axis.ticks = element_blank(),   # remove tick marks
     axis.title = element_blank()    # remove axis titles
-  )
+  ) 
+
+plot_dens_group11
+
+# ggsave(paste0("../R Export/plot_", var_name, ".jpg"),
+#        plot = plot_dens_group11, device = "jpg")
 ```
 
-## oac_constrained
+### oac_constrained
 
 ```{r, echo=FALSE, warning=FALSE}
+var_name <- "OAC Constrained"
+
+plot_oac_constrained <- 
 data %>% 
   mutate(oac_constrained = as.factor(oac_constrained)) %>% 
   ggplot()+
   geom_sf(aes(fill = oac_constrained), color = NA)+
   scale_fill_manual(
     values = c("0" = "grey80", "1" = "#1f78b4"),  # pick any colors
-    name = "OAC Constrained"
+    name = var_name
   ) +
     theme_minimal()+
   geom_sf(data = liv_outline, fill = NA, color = "grey", size = 0.1) +
@@ -310,19 +376,27 @@ data %>%
     axis.text = element_blank(),    # remove numbers
     axis.ticks = element_blank(),   # remove tick marks
     axis.title = element_blank()    # remove axis titles
-  )
+  ) 
+
+plot_oac_constrained
+
+# ggsave(paste0("../R Export/plot_", var_name, ".jpg"),
+#        plot = plot_oac_constrained, device = "jpg")
 ```
 
-## oac_cosmopolitan
+### oac_cosmopolitan
 
 ```{r, echo=FALSE, warning=FALSE}
+var_name <- "OAC Cosmopolitan"
+
+plot_oac_cosmopolitan <- 
 data %>% 
   mutate(oac_cosmopolitan = as.factor(oac_cosmopolitan)) %>% 
   ggplot()+
   geom_sf(aes(fill = oac_cosmopolitan), color = NA)+
   scale_fill_manual(
     values = c("0" = "grey80", "1" = "#1f78b4"),  # pick any colors
-    name = "OAC Cosmopolitan"
+    name = var_name
   ) +
     theme_minimal()+
   geom_sf(data = liv_outline, fill = NA, color = "grey", size = 0.1) +
@@ -330,19 +404,27 @@ data %>%
     axis.text = element_blank(),    # remove numbers
     axis.ticks = element_blank(),   # remove tick marks
     axis.title = element_blank()    # remove axis titles
-  )
+  ) 
+
+plot_oac_cosmopolitan
+
+# ggsave(paste0("../R Export/plot_", var_name, ".jpg"),
+#        plot = plot_oac_cosmopolitan, device = "jpg")
 ```
 
-## oac_ethnicentral
+### oac_ethnicentral
 
 ```{r, echo=FALSE, warning=FALSE}
+var_name <- "OAC Ethnicentral"
+
+plot_oac_ethnicentral <- 
 data %>% 
   mutate(oac_ethnicentral = as.factor(oac_ethnicentral)) %>% 
   ggplot()+
   geom_sf(aes(fill = oac_ethnicentral), color = NA)+
   scale_fill_manual(
     values = c("0" = "grey80", "1" = "#1f78b4"),  # pick any colors
-    name = "OAC Ethnicentral"
+    name = var_name
   ) +
     theme_minimal()+
   geom_sf(data = liv_outline, fill = NA, color = "grey", size = 0.1) +
@@ -350,20 +432,28 @@ data %>%
     axis.text = element_blank(),    # remove numbers
     axis.ticks = element_blank(),   # remove tick marks
     axis.title = element_blank()    # remove axis titles
-  )
+  ) 
+
+plot_oac_ethnicentral
+
+# ggsave(paste0("../R Export/plot_", var_name, ".jpg"),
+#        plot = plot_oac_ethnicentral, device = "jpg")
 ```
 
 
-## oac_hardpressed
+### oac_hardpressed
 
 ```{r, echo=FALSE, warning=FALSE}
+var_name <- "OAC Hardpressed"
+
+plot_oac_hardpressed <- 
 data %>% 
   mutate(oac_hardpressed = as.factor(oac_hardpressed)) %>% 
   ggplot()+
   geom_sf(aes(fill = oac_hardpressed), color = NA)+
   scale_fill_manual(
     values = c("0" = "grey80", "1" = "#1f78b4"),  # pick any colors
-    name = "OAC Hardpressed"
+    name = var_name
   ) +
     theme_minimal()+
   geom_sf(data = liv_outline, fill = NA, color = "grey", size = 0.1) +
@@ -371,19 +461,27 @@ data %>%
     axis.text = element_blank(),    # remove numbers
     axis.ticks = element_blank(),   # remove tick marks
     axis.title = element_blank()    # remove axis titles
-  )
+  ) 
+
+plot_oac_hardpressed
+
+# ggsave(paste0("../R Export/plot_", var_name, ".jpg"),
+#        plot = plot_oac_hardpressed, device = "jpg")
 ```
 
-## oac_suburban
+### oac_suburban
 
 ```{r, echo=FALSE, warning=FALSE}
+var_name <- "OAC Suburban"
+
+plot_oac_suburban <- 
 data %>% 
   mutate(oac_suburban = as.factor(oac_suburban)) %>% 
   ggplot()+
   geom_sf(aes(fill = oac_suburban), color = NA)+
   scale_fill_manual(
     values = c("0" = "grey80", "1" = "#1f78b4"),  # pick any colors
-    name = "OAC Suburban"
+    name = var_name
   ) +
     theme_minimal()+
   geom_sf(data = liv_outline, fill = NA, color = "grey", size = 0.1) +
@@ -391,9 +489,66 @@ data %>%
     axis.text = element_blank(),    # remove numbers
     axis.ticks = element_blank(),   # remove tick marks
     axis.title = element_blank()    # remove axis titles
-  )
+  ) 
+  # annotation_scale(
+  #   style = "ticks",
+  #   location = "br",      # bottom left
+  # )
+
+plot_oac_suburban
+
+# ggsave(paste0("../R Export/plot_", var_name, ".jpg"),
+#        plot = plot_oac_suburban, device = "jpg")
 ```
 
+## Put all maps together
 
+```{r}
+all_maps_01 <- wrap_plots(
+  plot_amenity_count, plot_nb11_NBcount,
+  plot_min_to_livmain, plot_nb11_LDcount,
+  plot_m_to_train, plot_nb11_HDcount,
+  plot_deprivation, plot_p_pre1919, 
+  ncol = 2,
+  nrow = 4
+)&
+theme(
+  legend.title = element_text(size = 6),
+  legend.text  = element_text(size = 5),
+  legend.key.height = unit(2, "mm"),
+  legend.key.width  = unit(2, "mm")
+)
+
+all_maps_02 <- wrap_plots(
+  plot_sfh_share, plot_dens_group11,
+  plot_oac_constrained, plot_oac_cosmopolitan,
+  plot_oac_ethnicentral, plot_oac_hardpressed, 
+  plot_oac_suburban,
+  ncol = 2,
+  nrow = 4
+)&
+theme(
+  legend.title = element_text(size = 6),
+  legend.text  = element_text(size = 5),
+  legend.key.height = unit(2, "mm"),
+  legend.key.width  = unit(2, "mm")
+)
+
+ggsave(
+  "../R Export/explanatory_maps_01.jpg",
+  all_maps_01,
+  width = 180,
+  # height = 240,
+  units = "mm"
+)
+
+ggsave(
+  "../R Export/explanatory_maps_02.jpg",
+  all_maps_02,
+  width = 180,
+  # height = 240,
+  units = "mm"
+)
+```
 
 
