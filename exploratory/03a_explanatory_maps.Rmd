@@ -38,8 +38,9 @@ data <- dens_grid_geom %>% filter(builtup2011 == 1) %>%
          oac_cosmopolitan = as.numeric(ifelse(SPRGRP == "2",1,0)),
          oac_ethnicentral = as.numeric(ifelse(SPRGRP == "3",1,0)),
          oac_hardpressed = as.numeric(ifelse(SPRGRP == "8",1,0)),
-         oac_suburban = as.numeric(ifelse(SPRGRP == "6",1,0))) %>% 
-  select(amenity_count:deprivation, p_pre1919:oac_suburban) %>% 
+         oac_suburban = as.numeric(ifelse(SPRGRP == "6",1,0)), 
+         addresses_2013 = if_else(is.na(addresses_2013), 0, addresses_2013)) %>% 
+  select(amenity_count:deprivation, p_pre1919:oac_suburban, addresses_2013) %>% 
   select(-m_to_park, -nb11_MDcount, -LSOA11CD, -Rank) %>% 
     mutate(min_to_livmain = if_else(min_to_livmain>50, 50, min_to_livmain)) 
 
@@ -153,6 +154,34 @@ ggplot(dataset_new) +
   ) 
 
 plot_amenity_count
+
+# ggsave(paste0("../R Export/plot_", var_name, ".jpg"),
+#        plot = plot_amenity_count, device = "jpg")
+```
+
+### Address density 2013
+
+```{r, echo=FALSE, warning=FALSE}
+var_name <- "Address density"
+unit <- " "
+
+dataset_new <- compute_fisher(data, addresses_2013)
+
+plot_addresses_2013 <- 
+ggplot(dataset_new) +
+  geom_sf(aes(fill = jenks_group), color = NA) +
+  scale_fill_viridis_d(option = "viridis", 
+                       direction = -1, 
+                       name = var_name) +
+  theme_minimal()+
+  geom_sf(data = liv_outline, fill = NA, color = "grey", size = 0.1) +
+    theme(
+    axis.text = element_blank(),    # remove numbers
+    axis.ticks = element_blank(),   # remove tick marks
+    axis.title = element_blank()    # remove axis titles
+  ) 
+
+plot_addresses_2013
 
 # ggsave(paste0("../R Export/plot_", var_name, ".jpg"),
 #        plot = plot_amenity_count, device = "jpg")
@@ -520,7 +549,7 @@ theme(
 )
 
 all_maps_02 <- wrap_plots(
-  plot_sfh_share, plot_dens_group11,
+  plot_sfh_share, plot_addresses_2013,
   plot_oac_constrained, plot_oac_cosmopolitan,
   plot_oac_ethnicentral, plot_oac_hardpressed, 
   plot_oac_suburban,
