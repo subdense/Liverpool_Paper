@@ -277,13 +277,14 @@ plot_nb11_NBcount
 var_name <- "Deprivation decile"
 unit <- " "
 
-dataset_new <- compute_fisher(data, deprivation)
+data$deprivation_inv <- 11 - data$deprivation
+dataset_new <- compute_fisher(data, deprivation_inv)
 
 plot_deprivation <- 
 ggplot(dataset_new) +
   geom_sf(aes(fill = jenks_group), color = NA) +
   scale_fill_viridis_d(option = "magma", 
-                       direction = 1, 
+                       direction = -1, 
                        name = var_name) +
   theme_minimal()+
   geom_sf(data = liv_outline, fill = NA, color = "grey", size = 0.1) +
